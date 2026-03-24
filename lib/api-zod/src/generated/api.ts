@@ -47,6 +47,17 @@ export const GetUsageResponse = zod.object({
       timestamp: zod.string(),
     }),
   ),
+  savingsInsights: zod.object({
+    topSavings: zod.array(
+      zod.object({
+        label: zod.string(),
+        savedAmount: zod.number(),
+        category: zod.string(),
+      }),
+    ),
+    wastedSpend: zod.number(),
+    recommendation: zod.string(),
+  }),
 });
 
 /**

@@ -3,8 +3,26 @@ import { StatCard } from "@/components/ui/StatCard";
 import { ActivityFeed } from "@/components/ui/ActivityFeed";
 import { useUsageData, useOptimize } from "@/hooks/use-app-data";
 import { formatCurrency, formatNumber } from "@/lib/utils";
-import { DollarSign, Wallet, BrainCircuit, Wand2, Zap } from "lucide-react";
+import { DollarSign, Wallet, BrainCircuit, Wand2, Zap, TrendingDown, ArrowRightLeft, Database, Scissors, Lightbulb, AlertTriangle } from "lucide-react";
 import { motion } from "framer-motion";
+
+const categoryIcon = (category: string) => {
+  switch (category) {
+    case "routing": return <ArrowRightLeft className="w-4 h-4" />;
+    case "caching": return <Database className="w-4 h-4" />;
+    case "compression": return <Scissors className="w-4 h-4" />;
+    default: return <TrendingDown className="w-4 h-4" />;
+  }
+};
+
+const categoryColor = (category: string) => {
+  switch (category) {
+    case "routing": return "text-blue-400 bg-blue-400/10";
+    case "caching": return "text-emerald-400 bg-emerald-400/10";
+    case "compression": return "text-violet-400 bg-violet-400/10";
+    default: return "text-primary bg-primary/10";
+  }
+};
 
 export default function Home() {
   const { data, isLoading } = useUsageData();
@@ -20,17 +38,19 @@ export default function Home() {
     );
   }
 
+  const insights = data.savingsInsights;
+
   return (
     <Shell>
       <header className="mb-8">
-        <motion.h1 
+        <motion.h1
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           className="text-3xl md:text-4xl font-display font-bold text-foreground"
         >
           Overview
         </motion.h1>
-        <motion.p 
+        <motion.p
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 }}
@@ -49,7 +69,7 @@ export default function Home() {
           className="glass-panel rounded-3xl p-8 relative overflow-hidden flex flex-col justify-between min-h-[220px]"
         >
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[60px] -translate-y-1/4 translate-x-1/4" />
-          
+
           <div>
             <div className="flex items-center gap-2 mb-2">
               <DollarSign className="w-5 h-5 text-primary" />
@@ -80,7 +100,7 @@ export default function Home() {
           className="glass-panel rounded-3xl p-8 relative overflow-hidden flex flex-col justify-between min-h-[220px] success-glow border-success/30"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-success/10 to-transparent pointer-events-none" />
-          
+
           <div className="relative z-10 flex justify-between items-start">
             <div>
               <div className="flex items-center gap-2 mb-2">
@@ -124,29 +144,97 @@ export default function Home() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <StatCard 
+        <StatCard
           delay={0.2}
-          title="Available Credits" 
-          value={formatCurrency(data.credits)} 
-          icon={<Wallet className="w-4 h-4" />} 
+          title="Available Credits"
+          value={formatCurrency(data.credits)}
+          icon={<Wallet className="w-4 h-4" />}
         />
-        <StatCard 
+        <StatCard
           delay={0.3}
-          title="Avg Cost / Request" 
-          value={formatCurrency(data.avgCost)} 
+          title="Avg Cost / Request"
+          value={formatCurrency(data.avgCost)}
           trend={{ value: "-4.2%", isPositive: true }}
         />
-        <StatCard 
+        <StatCard
           delay={0.4}
-          title="Top Tool" 
-          value={data.topTool} 
-          icon={<BrainCircuit className="w-4 h-4" />} 
+          title="Top Tool"
+          value={data.topTool}
+          icon={<BrainCircuit className="w-4 h-4" />}
           className="whitespace-nowrap overflow-hidden text-ellipsis"
         />
       </div>
 
+      {/* Savings Insights */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45 }}
+        className="glass-panel rounded-2xl p-6 mb-8"
+      >
+        <div className="flex items-center gap-2 mb-6">
+          <TrendingDown className="w-5 h-5 text-primary" />
+          <h2 className="text-xl font-display font-bold text-foreground">Savings Insights</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+          {insights.topSavings.map((item, i) => (
+            <motion.div
+              key={item.label}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 + i * 0.08 }}
+              className="flex items-start gap-3 p-4 rounded-xl bg-secondary/40 border border-border/40"
+            >
+              <div className={`p-2 rounded-lg flex-shrink-0 ${categoryColor(item.category)}`}>
+                {categoryIcon(item.category)}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm text-muted-foreground leading-snug">{item.label}</p>
+                <p className="text-lg font-bold text-success mt-1">{formatCurrency(item.savedAmount)} saved</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Wasted Spend */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.74 }}
+            className="flex items-center gap-3 p-4 rounded-xl bg-red-500/8 border border-red-500/20"
+          >
+            <div className="p-2 rounded-lg text-red-400 bg-red-400/10 flex-shrink-0">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Estimated Wasted Spend</p>
+              <p className="text-xl font-bold text-red-400">{formatCurrency(insights.wastedSpend)}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">requests that could be cheaper</p>
+            </div>
+          </motion.div>
+
+          {/* Recommendation */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.82 }}
+            className="flex items-start gap-3 p-4 rounded-xl bg-primary/8 border border-primary/20"
+          >
+            <div className="p-2 rounded-lg text-primary bg-primary/10 flex-shrink-0">
+              <Lightbulb className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-primary mb-1">Recommendation</p>
+              <p className="text-sm text-foreground leading-relaxed">{insights.recommendation}</p>
+            </div>
+          </motion.div>
+        </div>
+      </motion.div>
+
       {/* Live Activity Feed */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
@@ -159,7 +247,7 @@ export default function Home() {
             Polling Live
           </div>
         </div>
-        
+
         <ActivityFeed items={data.activity.slice(0, 5)} />
       </motion.div>
     </Shell>

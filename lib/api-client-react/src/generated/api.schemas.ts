@@ -34,6 +34,18 @@ export interface ModelUsage {
   cost: number;
 }
 
+export interface SavingInsight {
+  label: string;
+  savedAmount: number;
+  category: string;
+}
+
+export interface SavingsInsights {
+  topSavings: SavingInsight[];
+  wastedSpend: number;
+  recommendation: string;
+}
+
 export interface UsageData {
   totalRequests: number;
   avgLatency: number;
@@ -46,6 +58,7 @@ export interface UsageData {
   topTool: string;
   models: ModelUsage[];
   activity: ActivityItem[];
+  savingsInsights: SavingsInsights;
 }
 
 export interface OptimizationResult {

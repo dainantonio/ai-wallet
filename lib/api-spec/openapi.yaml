@@ -130,6 +130,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ActivityItem"
+        savingsInsights:
+          $ref: "#/components/schemas/SavingsInsights"
       required:
         - totalRequests
         - avgLatency
@@ -142,6 +144,35 @@ components:
         - topTool
         - models
         - activity
+        - savingsInsights
+    SavingInsight:
+      type: object
+      properties:
+        label:
+          type: string
+        savedAmount:
+          type: number
+        category:
+          type: string
+      required:
+        - label
+        - savedAmount
+        - category
+    SavingsInsights:
+      type: object
+      properties:
+        topSavings:
+          type: array
+          items:
+            $ref: "#/components/schemas/SavingInsight"
+        wastedSpend:
+          type: number
+        recommendation:
+          type: string
+      required:
+        - topSavings
+        - wastedSpend
+        - recommendation
     OptimizationResult:
       type: object
       properties:

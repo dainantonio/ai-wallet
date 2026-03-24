@@ -11,4 +11,6 @@ export * from "./activityItemType";
 export * from "./healthStatus";
 export * from "./modelUsage";
 export * from "./optimizationResult";
+export * from "./savingInsight";
+export * from "./savingsInsights";
 export * from "./usageData";

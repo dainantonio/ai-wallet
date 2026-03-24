@@ -41,6 +41,15 @@ router.get("/usage", (_req, res) => {
     topTool: "GPT-4o",
     models: mockModels,
     activity: activityLog.slice(0, 10),
+    savingsInsights: {
+      topSavings: [
+        { label: "Model switching (GPT-4o → Claude 3.5)", savedAmount: 18.40, category: "routing" },
+        { label: "Semantic cache hits (312 requests)", savedAmount: 9.60, category: "caching" },
+        { label: "Prompt compression (avg 28% reduction)", savedAmount: 6.20, category: "compression" },
+      ],
+      wastedSpend: 22.30,
+      recommendation: "Switch 30% of GPT-4o usage to GPT-4o-mini for simple tasks — estimated additional savings of $19/mo.",
+    },
   });
   res.json(data);
 });

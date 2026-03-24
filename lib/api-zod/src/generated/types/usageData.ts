@@ -7,6 +7,7 @@
  */
 import type { ActivityItem } from "./activityItem";
 import type { ModelUsage } from "./modelUsage";
+import type { SavingsInsights } from "./savingsInsights";
 
 export interface UsageData {
   totalRequests: number;
@@ -20,4 +21,5 @@ export interface UsageData {
   topTool: string;
   models: ModelUsage[];
   activity: ActivityItem[];
+  savingsInsights: SavingsInsights;
 }
