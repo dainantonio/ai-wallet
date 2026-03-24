@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Shell } from "@/components/layout/Shell";
 import { StatCard } from "@/components/ui/StatCard";
 import { ActivityFeed } from "@/components/ui/ActivityFeed";
@@ -9,7 +9,7 @@ import {
   DollarSign, Wallet, BrainCircuit, Wand2, Zap,
   TrendingDown, ArrowRightLeft, Database, Scissors,
   Lightbulb, AlertTriangle, FlaskConical, ChevronRight,
-  MessageSquare, Image, Bot,
+  MessageSquare, Image, Bot, Target, CheckCircle2, TriangleAlert, XCircle,
 } from "lucide-react";
 import { motion, animate as motionAnimate } from "framer-motion";
 
@@ -135,6 +135,9 @@ export default function Home() {
   const { data, isLoading } = useUsageData();
   const { mutate: optimize, isPending } = useOptimize();
   const [simEnabled, setSimEnabled] = useState(false);
+  const [budget, setBudget] = useState(200);
+  const [budgetInput, setBudgetInput] = useState("200");
+  const [editingBudget, setEditingBudget] = useState(false);
 
   if (isLoading || !data) {
     return (
@@ -149,6 +152,23 @@ export default function Home() {
   const sim = applySimulation(data);
   const display = simEnabled ? sim : data;
   const insights = data.savingsInsights;
+
+  // Budget calculations
+  const spend = display.totalSpend;
+  const usedPct = Math.min((spend / budget) * 100, 100);
+  const budgetStatus =
+    usedPct >= 90
+      ? { label: "You've hit your limit", icon: <XCircle className="w-4 h-4" />, color: "text-red-400", barColor: "bg-red-400", bg: "bg-red-400/8 border-red-400/25" }
+      : usedPct >= 70
+      ? { label: "You're close to your limit", icon: <TriangleAlert className="w-4 h-4" />, color: "text-yellow-400", barColor: "bg-yellow-400", bg: "bg-yellow-400/8 border-yellow-400/25" }
+      : { label: "You're on track", icon: <CheckCircle2 className="w-4 h-4" />, color: "text-success", barColor: "bg-success", bg: "bg-success/8 border-success/25" };
+
+  const commitBudget = () => {
+    const v = parseFloat(budgetInput);
+    if (!isNaN(v) && v > 0) setBudget(v);
+    else setBudgetInput(String(budget));
+    setEditingBudget(false);
+  };
 
   return (
     <Shell>
@@ -345,6 +365,86 @@ export default function Home() {
           className="whitespace-nowrap overflow-hidden text-ellipsis"
         />
       </div>
+
+      {/* ── Monthly AI Budget ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.41 }}
+        className={`glass-panel rounded-2xl p-6 mb-8 border transition-colors duration-500 ${budgetStatus.bg}`}
+      >
+        <div className="flex items-center justify-between gap-4 flex-wrap mb-5">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${budgetStatus.color} bg-current/10`}>
+              <Target className="w-4 h-4" style={{ color: "inherit" }} />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-foreground">Monthly AI Budget</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Track spend against your set limit</p>
+            </div>
+          </div>
+
+          {/* Editable budget amount */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Budget:</span>
+            {editingBudget ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-foreground font-medium">$</span>
+                <input
+                  autoFocus
+                  type="number"
+                  min={1}
+                  value={budgetInput}
+                  onChange={(e) => setBudgetInput(e.target.value)}
+                  onBlur={commitBudget}
+                  onKeyDown={(e) => { if (e.key === "Enter") commitBudget(); if (e.key === "Escape") { setBudgetInput(String(budget)); setEditingBudget(false); } }}
+                  className="w-24 text-sm font-semibold bg-secondary border border-border rounded-lg px-2.5 py-1 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+                <span className="text-sm text-muted-foreground">/mo</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setBudgetInput(String(budget)); setEditingBudget(true); }}
+                className="text-sm font-semibold text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg px-3 py-1 transition-colors"
+              >
+                ${budget}/mo ✏️
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="mb-3">
+          <div className="flex justify-between text-xs text-muted-foreground mb-2">
+            <span>{formatCurrency(spend)} used</span>
+            <span>{formatCurrency(budget - spend > 0 ? budget - spend : 0)} remaining</span>
+          </div>
+          <div className="h-3 rounded-full bg-secondary overflow-hidden">
+            <motion.div
+              className={`h-full rounded-full transition-colors duration-500 ${budgetStatus.barColor}`}
+              initial={{ width: 0 }}
+              animate={{ width: `${usedPct}%` }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            />
+          </div>
+          <div className="flex justify-between text-xs mt-1.5">
+            <span className="text-muted-foreground">$0</span>
+            <span className="text-muted-foreground font-medium">{usedPct.toFixed(0)}% used</span>
+            <span className="text-muted-foreground">{formatCurrency(budget)}</span>
+          </div>
+        </div>
+
+        {/* Status message */}
+        <div className={`flex items-center gap-2 text-sm font-medium ${budgetStatus.color}`}>
+          {budgetStatus.icon}
+          <span>{budgetStatus.label}</span>
+          {usedPct < 70 && (
+            <span className="text-xs text-muted-foreground font-normal ml-1">
+              — {formatCurrency(budget - spend)} left for the month
+            </span>
+          )}
+        </div>
+      </motion.div>
 
       {/* ── Where your money is going ── */}
       <motion.div
