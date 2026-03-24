@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Activity, Home, Zap, Settings, BarChart3, BellRing } from "lucide-react";
+import { Wallet, Home, Sparkles, Settings, BarChart3, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
@@ -7,7 +7,7 @@ const NAV_ITEMS = [
   { path: "/", label: "Dashboard", icon: Home },
   { path: "/usage", label: "Usage & Models", icon: BarChart3 },
   { path: "/alerts", label: "Alert Rules", icon: BellRing },
-  { path: "/autopilot", label: "Autopilot", icon: Zap },
+  { path: "/autopilot", label: "Smart Spend", icon: Sparkles },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -15,7 +15,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden selection:bg-primary/30">
-      
+
       {/* Background Effects */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px] mix-blend-screen opacity-50 translate-x-1/3 -translate-y-1/3" />
@@ -27,11 +27,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex w-72 flex-col border-r border-border/40 glass-panel z-20 relative">
         <div className="p-6 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-indigo-600 flex items-center justify-center shadow-lg shadow-primary/20">
-            <Activity className="w-5 h-5 text-white" />
+            <Wallet className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-display font-bold text-lg leading-tight text-gradient">AI Spend</h1>
-            <p className="text-xs font-medium text-success tracking-wide uppercase">Autopilot Active</p>
+            <h1 className="font-display font-bold text-lg leading-tight text-gradient">AI Wallet</h1>
+            <p className="text-xs font-medium text-success tracking-wide uppercase">Smart Spend Active</p>
           </div>
         </div>
 
@@ -39,20 +39,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
           {NAV_ITEMS.map((item) => {
             const isActive = location === item.path;
             const Icon = item.icon;
-            
             return (
               <Link key={item.path} href={item.path} className="block">
                 <div
                   className={cn(
                     "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 relative group overflow-hidden",
-                    isActive 
-                      ? "text-white font-semibold" 
+                    isActive
+                      ? "text-white font-semibold"
                       : "text-muted-foreground hover:text-white hover:bg-white/5"
                   )}
                 >
                   {isActive && (
-                    <motion.div 
-                      layoutId="sidebar-active" 
+                    <motion.div
+                      layoutId="sidebar-active"
                       className="absolute inset-0 bg-primary/15 border border-primary/30 rounded-xl -z-10"
                       initial={false}
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
@@ -90,13 +89,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
           {NAV_ITEMS.map((item) => {
             const isActive = location === item.path;
             const Icon = item.icon;
-            
             return (
               <Link key={item.path} href={item.path} className="flex-1 flex justify-center">
                 <div className="relative p-2 flex flex-col items-center gap-1">
                   {isActive && (
-                    <motion.div 
-                      layoutId="mobile-active" 
+                    <motion.div
+                      layoutId="mobile-active"
                       className="absolute inset-0 bg-primary/15 rounded-xl -z-10"
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
                     />
