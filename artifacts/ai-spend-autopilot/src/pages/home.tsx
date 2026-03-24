@@ -1,32 +1,94 @@
+import { useState, useEffect, useRef } from "react";
 import { Shell } from "@/components/layout/Shell";
 import { StatCard } from "@/components/ui/StatCard";
 import { ActivityFeed } from "@/components/ui/ActivityFeed";
+import { Switch } from "@/components/ui/switch";
 import { useUsageData, useOptimize } from "@/hooks/use-app-data";
 import { formatCurrency, formatNumber } from "@/lib/utils";
-import { DollarSign, Wallet, BrainCircuit, Wand2, Zap, TrendingDown, ArrowRightLeft, Database, Scissors, Lightbulb, AlertTriangle } from "lucide-react";
-import { motion } from "framer-motion";
+import {
+  DollarSign, Wallet, BrainCircuit, Wand2, Zap,
+  TrendingDown, ArrowRightLeft, Database, Scissors,
+  Lightbulb, AlertTriangle, FlaskConical, ChevronRight,
+} from "lucide-react";
+import { motion, animate as motionAnimate } from "framer-motion";
 
-const categoryIcon = (category: string) => {
-  switch (category) {
-    case "routing": return <ArrowRightLeft className="w-4 h-4" />;
-    case "caching": return <Database className="w-4 h-4" />;
-    case "compression": return <Scissors className="w-4 h-4" />;
-    default: return <TrendingDown className="w-4 h-4" />;
-  }
+// ─── Animated counter ────────────────────────────────────────────────────────
+function AnimatedNumber({ value, prefix = "", suffix = "", decimals = 0 }: {
+  value: number; prefix?: string; suffix?: string; decimals?: number;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const prevRef = useRef(value);
+
+  useEffect(() => {
+    const from = prevRef.current;
+    prevRef.current = value;
+    if (!ref.current || from === value) return;
+
+    const ctrl = motionAnimate(from, value, {
+      duration: 0.7,
+      ease: "easeOut",
+      onUpdate(v) {
+        if (ref.current) {
+          ref.current.textContent = prefix + v.toFixed(decimals) + suffix;
+        }
+      },
+    });
+    return () => ctrl.stop();
+  }, [value, prefix, suffix, decimals]);
+
+  return (
+    <span ref={ref}>
+      {prefix}{value.toFixed(decimals)}{suffix}
+    </span>
+  );
+}
+
+// ─── Simulation math ─────────────────────────────────────────────────────────
+const SIM_SWITCH_PCT = 0.30;          // 30 % of GPT-4o routed to mini
+const GPT4O_COST_PER_REQ = 0.0665;
+const MINI_COST_PER_REQ  = 0.0166;
+const GPT4O_REQUESTS     = 1240;
+
+function applySimulation(data: {
+  totalSpend: number; savings: number; savingsPercent: number;
+  autopilotSaved: number; credits: number; avgCost: number; totalRequests: number;
+}) {
+  const switched   = Math.round(GPT4O_REQUESTS * SIM_SWITCH_PCT);        // 372
+  const extraSaved = switched * (GPT4O_COST_PER_REQ - MINI_COST_PER_REQ); // ≈ $18.57
+  const newSpend   = data.totalSpend - extraSaved;
+  const newSavings = data.savings + extraSaved;
+  const originalTotal = data.totalSpend + data.savings;
+  return {
+    totalSpend:     newSpend,
+    savings:        newSavings,
+    savingsPercent: +((newSavings / originalTotal) * 100).toFixed(1),
+    autopilotSaved: data.autopilotSaved + extraSaved,
+    credits:        data.credits + extraSaved,
+    avgCost:        +(newSpend / data.totalRequests).toFixed(4),
+    extraSaved,
+    switched,
+  };
+}
+
+// ─── Category helpers ─────────────────────────────────────────────────────────
+const categoryIcon = (cat: string) => {
+  if (cat === "routing")     return <ArrowRightLeft className="w-4 h-4" />;
+  if (cat === "caching")     return <Database className="w-4 h-4" />;
+  if (cat === "compression") return <Scissors className="w-4 h-4" />;
+  return <TrendingDown className="w-4 h-4" />;
+};
+const categoryColor = (cat: string) => {
+  if (cat === "routing")     return "text-blue-400 bg-blue-400/10";
+  if (cat === "caching")     return "text-emerald-400 bg-emerald-400/10";
+  if (cat === "compression") return "text-violet-400 bg-violet-400/10";
+  return "text-primary bg-primary/10";
 };
 
-const categoryColor = (category: string) => {
-  switch (category) {
-    case "routing": return "text-blue-400 bg-blue-400/10";
-    case "caching": return "text-emerald-400 bg-emerald-400/10";
-    case "compression": return "text-violet-400 bg-violet-400/10";
-    default: return "text-primary bg-primary/10";
-  }
-};
-
+// ─── Page ────────────────────────────────────────────────────────────────────
 export default function Home() {
   const { data, isLoading } = useUsageData();
   const { mutate: optimize, isPending } = useOptimize();
+  const [simEnabled, setSimEnabled] = useState(false);
 
   if (isLoading || !data) {
     return (
@@ -38,6 +100,8 @@ export default function Home() {
     );
   }
 
+  const sim = applySimulation(data);
+  const display = simEnabled ? sim : data;
   const insights = data.savingsInsights;
 
   return (
@@ -60,8 +124,67 @@ export default function Home() {
         </motion.p>
       </header>
 
+      {/* ── Simulation Control ── */}
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className={`mb-6 rounded-2xl border p-5 transition-colors duration-300 ${
+          simEnabled
+            ? "bg-primary/8 border-primary/30"
+            : "glass-panel border-border/50"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg transition-colors ${simEnabled ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"}`}>
+              <FlaskConical className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-semibold text-foreground text-sm">Cost Simulation</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Route {Math.round(SIM_SWITCH_PCT * 100)}% of GPT-4o requests to GPT-4o-mini
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className={`text-sm transition-colors ${simEnabled ? "text-primary font-medium" : "text-muted-foreground"}`}>
+              {simEnabled ? "Simulation ON" : "Simulation OFF"}
+            </span>
+            <Switch checked={simEnabled} onCheckedChange={setSimEnabled} />
+          </div>
+        </div>
+
+        {/* Projected impact row */}
+        <motion.div
+          initial={false}
+          animate={{ height: simEnabled ? "auto" : 0, opacity: simEnabled ? 1 : 0 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          className="overflow-hidden"
+        >
+          <div className="mt-4 pt-4 border-t border-primary/20 grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Projected Spend", value: formatCurrency(sim.totalSpend), delta: `-${formatCurrency(sim.extraSaved)}`, good: true },
+              { label: "Total Savings", value: formatCurrency(sim.savings), delta: `+${formatCurrency(sim.extraSaved)}`, good: true },
+              { label: "Savings Rate", value: `${sim.savingsPercent}%`, delta: `+${(sim.savingsPercent - data.savingsPercent).toFixed(1)}%`, good: true },
+              { label: "Requests Switched", value: formatNumber(sim.switched), delta: "to mini", good: true },
+            ].map((item) => (
+              <div key={item.label} className="bg-primary/8 rounded-xl px-3 py-2.5">
+                <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
+                <p className="text-base font-bold text-foreground">{item.value}</p>
+                <p className="text-xs text-success mt-0.5 flex items-center gap-1">
+                  <ChevronRight className="w-3 h-3" />{item.delta}
+                </p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      </motion.div>
+
+      {/* ── Main Cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {/* Main Spend Card */}
+        {/* Spend Card */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -70,20 +193,32 @@ export default function Home() {
         >
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[60px] -translate-y-1/4 translate-x-1/4" />
 
+          {simEnabled && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute top-4 right-4 bg-primary/15 border border-primary/30 text-primary text-xs font-semibold px-2.5 py-1 rounded-full z-10"
+            >
+              Simulated
+            </motion.div>
+          )}
+
           <div>
             <div className="flex items-center gap-2 mb-2">
               <DollarSign className="w-5 h-5 text-primary" />
               <h2 className="text-lg font-medium text-muted-foreground">This Month's Spend</h2>
             </div>
             <div className="text-5xl font-display font-bold text-white tracking-tight">
-              {formatCurrency(data.totalSpend)}
+              $<AnimatedNumber value={display.totalSpend} decimals={1} />
             </div>
           </div>
 
           <div className="mt-8 flex items-center justify-between border-t border-border/50 pt-4">
             <div>
               <p className="text-sm text-muted-foreground">Projected Savings</p>
-              <p className="text-lg font-semibold text-success">{data.savingsPercent}%</p>
+              <p className="text-lg font-semibold text-success">
+                <AnimatedNumber value={display.savingsPercent} decimals={1} suffix="%" />
+              </p>
             </div>
             <div className="text-right">
               <p className="text-sm text-muted-foreground">Total Requests</p>
@@ -92,7 +227,7 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Autopilot Status Card */}
+        {/* Autopilot Card */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -118,7 +253,7 @@ export default function Home() {
             <div>
               <p className="text-sm text-muted-foreground mb-1">Saved by Autopilot</p>
               <div className="text-4xl font-display font-bold text-success tracking-tight">
-                {formatCurrency(data.autopilotSaved)}
+                $<AnimatedNumber value={display.autopilotSaved} decimals={1} />
               </div>
             </div>
             <button
@@ -142,19 +277,19 @@ export default function Home() {
         </motion.div>
       </div>
 
-      {/* Stats Grid */}
+      {/* ── Stats Grid ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <StatCard
           delay={0.2}
           title="Available Credits"
-          value={formatCurrency(data.credits)}
+          value={`$${display.credits.toFixed(1)}`}
           icon={<Wallet className="w-4 h-4" />}
         />
         <StatCard
           delay={0.3}
           title="Avg Cost / Request"
-          value={formatCurrency(data.avgCost)}
-          trend={{ value: "-4.2%", isPositive: true }}
+          value={`$${display.avgCost.toFixed(3)}`}
+          trend={{ value: simEnabled ? `-${(((data.avgCost - sim.avgCost) / data.avgCost) * 100).toFixed(1)}%` : "-4.2%", isPositive: true }}
         />
         <StatCard
           delay={0.4}
@@ -165,7 +300,7 @@ export default function Home() {
         />
       </div>
 
-      {/* Savings Insights */}
+      {/* ── Savings Insights ── */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -198,7 +333,6 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Wasted Spend */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -215,7 +349,6 @@ export default function Home() {
             </div>
           </motion.div>
 
-          {/* Recommendation */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -233,7 +366,7 @@ export default function Home() {
         </div>
       </motion.div>
 
-      {/* Live Activity Feed */}
+      {/* ── Live Activity Feed ── */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -247,7 +380,6 @@ export default function Home() {
             Polling Live
           </div>
         </div>
-
         <ActivityFeed items={data.activity.slice(0, 5)} />
       </motion.div>
     </Shell>
