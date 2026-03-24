@@ -9,6 +9,7 @@ import {
   DollarSign, Wallet, BrainCircuit, Wand2, Zap,
   TrendingDown, ArrowRightLeft, Database, Scissors,
   Lightbulb, AlertTriangle, FlaskConical, ChevronRight,
+  MessageSquare, Image, Bot,
 } from "lucide-react";
 import { motion, animate as motionAnimate } from "framer-motion";
 
@@ -68,6 +69,51 @@ function applySimulation(data: {
     extraSaved,
     switched,
   };
+}
+
+// ─── Spend category data ─────────────────────────────────────────────────────
+const SPEND_CATEGORIES = [
+  {
+    label: "Writing & Chat",
+    description: "Drafts, summaries, Q&A",
+    icon: <MessageSquare className="w-4 h-4" />,
+    pct: 48,
+    amount: 76.10,
+    color: "bg-blue-400",
+    textColor: "text-blue-400",
+  },
+  {
+    label: "Image Generation",
+    description: "Visuals, thumbnails, assets",
+    icon: <Image className="w-4 h-4" />,
+    pct: 31,
+    amount: 49.10,
+    color: "bg-violet-400",
+    textColor: "text-violet-400",
+  },
+  {
+    label: "Automation",
+    description: "Pipelines, agents, scripts",
+    icon: <Bot className="w-4 h-4" />,
+    pct: 21,
+    amount: 33.30,
+    color: "bg-emerald-400",
+    textColor: "text-emerald-400",
+  },
+];
+
+// ─── Animated bar ─────────────────────────────────────────────────────────────
+function AnimatedBar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div className="h-2.5 rounded-full bg-secondary overflow-hidden">
+      <motion.div
+        className={`h-full rounded-full ${color}`}
+        initial={{ width: 0 }}
+        animate={{ width: `${pct}%` }}
+        transition={{ duration: 0.9, ease: "easeOut", delay: 0.1 }}
+      />
+    </div>
+  );
 }
 
 // ─── Category helpers ─────────────────────────────────────────────────────────
@@ -299,6 +345,50 @@ export default function Home() {
           className="whitespace-nowrap overflow-hidden text-ellipsis"
         />
       </div>
+
+      {/* ── Where your money is going ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.42 }}
+        className="glass-panel rounded-2xl p-6 mb-8"
+      >
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-display font-bold text-foreground">Where your AI money is going</h2>
+            <p className="text-sm text-muted-foreground mt-1">This month's spend by use case</p>
+          </div>
+          <span className="text-xs text-muted-foreground bg-secondary px-3 py-1.5 rounded-full">Simulated</span>
+        </div>
+
+        <div className="space-y-5">
+          {SPEND_CATEGORIES.map((cat, i) => (
+            <motion.div
+              key={cat.label}
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.48 + i * 0.08 }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-1.5 rounded-lg ${cat.textColor} bg-current/10`} style={{ color: "inherit" }}>
+                    <span className={cat.textColor}>{cat.icon}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{cat.label}</p>
+                    <p className="text-xs text-muted-foreground">{cat.description}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-foreground">{formatCurrency(cat.amount)}</p>
+                  <p className={`text-xs font-medium ${cat.textColor}`}>{cat.pct}%</p>
+                </div>
+              </div>
+              <AnimatedBar pct={cat.pct} color={cat.color} />
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
 
       {/* ── Savings Insights ── */}
       <motion.div
