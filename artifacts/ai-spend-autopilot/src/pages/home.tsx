@@ -1,84 +1,86 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Shell } from "@/components/layout/Shell";
 import { StatCard } from "@/components/ui/StatCard";
-import { ActivityFeed } from "@/components/ui/ActivityFeed";
-import { Switch } from "@/components/ui/switch";
-import { useUsageData, useOptimize } from "@/hooks/use-app-data";
+import { useUsageData } from "@/hooks/use-app-data";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import {
   Wallet, BrainCircuit, Sparkles, Zap,
   TrendingDown, ArrowRightLeft, Database, Scissors,
-  Lightbulb, AlertTriangle, FlaskConical, ChevronRight,
+  Lightbulb, AlertTriangle, ChevronRight,
   MessageSquare, Image, Bot, Target, CheckCircle2,
   TriangleAlert, XCircle, Gauge, Leaf, Flame,
-  CreditCard, Receipt,
+  CreditCard, Receipt, ArrowDownRight, ArrowUpRight, RefreshCw,
 } from "lucide-react";
-import { motion, animate as motionAnimate } from "framer-motion";
+import { motion, AnimatePresence, animate as motionAnimate } from "framer-motion";
+import type { UsageData } from "@workspace/api-client-react/src/generated/api.schemas";
 
-// ─── Animated counter ────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
+type SpendMode = "saver" | "balanced" | "performance";
+
+interface TxItem {
+  id: string;
+  label: string;
+  amount: number;        // positive = savings, negative = spend
+  timestamp: number;
+  type: "optimization" | "usage" | "mode_switch";
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+const MODES: { id: SpendMode; label: string; desc: string; icon: React.ReactNode; switchPct: number; color: string; savingsTag: string }[] = [
+  { id: "saver",       label: "Saver",       desc: "Max savings, slight latency increase", icon: <Leaf className="w-4 h-4" />,  switchPct: 0.50, color: "text-emerald-400 border-emerald-400/40 bg-emerald-400/10", savingsTag: "saving more" },
+  { id: "balanced",    label: "Balanced",    desc: "Smart mix of cost and performance",    icon: <Gauge className="w-4 h-4" />, switchPct: 0.30, color: "text-primary border-primary/40 bg-primary/10",             savingsTag: "balanced approach" },
+  { id: "performance", label: "Performance", desc: "Best models, full speed",             icon: <Flame className="w-4 h-4" />, switchPct: 0.00, color: "text-orange-400 border-orange-400/40 bg-orange-400/10",    savingsTag: "max performance" },
+];
+
+const GPT4O_COST  = 0.0665;
+const MINI_COST   = 0.0166;
+const GPT4O_REQS  = 1240;
+
+const COST_LABELS = [
+  "GPT-4o API request batch",
+  "Image generation call",
+  "Embedding computation",
+  "Chat completion request",
+  "Code analysis run",
+  "Document summarization",
+  "Agent pipeline execution",
+];
+
+const SAVE_LABELS = [
+  "Smart routing: GPT-4o → mini",
+  "Semantic cache hit",
+  "Batch compression savings",
+  "Model downgrade applied",
+  "Duplicate request merged",
+  "Token budget optimization",
+];
+
+const SPEND_CATEGORIES = [
+  { label: "Writing & Chat",   description: "Drafts, summaries, Q&A",     icon: <MessageSquare className="w-4 h-4" />, pct: 48, amount: 76.10, color: "bg-blue-400",    textColor: "text-blue-400" },
+  { label: "Image Generation", description: "Visuals, thumbnails, assets", icon: <Image className="w-4 h-4" />,        pct: 31, amount: 49.10, color: "bg-violet-400",  textColor: "text-violet-400" },
+  { label: "Automation",       description: "Pipelines, agents, scripts",  icon: <Bot className="w-4 h-4" />,          pct: 21, amount: 33.30, color: "bg-emerald-400", textColor: "text-emerald-400" },
+];
+
+// ─── Animated number counter ─────────────────────────────────────────────────
 function AnimatedNumber({ value, prefix = "", suffix = "", decimals = 0 }: {
   value: number; prefix?: string; suffix?: string; decimals?: number;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const prevRef = useRef(value);
-
   useEffect(() => {
     const from = prevRef.current;
     prevRef.current = value;
     if (!ref.current || from === value) return;
     const ctrl = motionAnimate(from, value, {
-      duration: 0.7, ease: "easeOut",
-      onUpdate(v) {
-        if (ref.current) ref.current.textContent = prefix + v.toFixed(decimals) + suffix;
-      },
+      duration: 0.6, ease: "easeOut",
+      onUpdate(v) { if (ref.current) ref.current.textContent = prefix + v.toFixed(decimals) + suffix; },
     });
     return () => ctrl.stop();
   }, [value, prefix, suffix, decimals]);
-
   return <span ref={ref}>{prefix}{value.toFixed(decimals)}{suffix}</span>;
 }
 
-// ─── Spend modes ─────────────────────────────────────────────────────────────
-type SpendMode = "saver" | "balanced" | "performance";
-
-const MODES: { id: SpendMode; label: string; desc: string; icon: React.ReactNode; switchPct: number; color: string }[] = [
-  { id: "saver",       label: "Saver",       desc: "Max savings, slight latency increase", icon: <Leaf className="w-4 h-4" />,  switchPct: 0.50, color: "text-emerald-400 border-emerald-400/40 bg-emerald-400/10" },
-  { id: "balanced",    label: "Balanced",    desc: "Smart mix of cost and performance",    icon: <Gauge className="w-4 h-4" />, switchPct: 0.30, color: "text-primary border-primary/40 bg-primary/10" },
-  { id: "performance", label: "Performance", desc: "Best models, full speed",             icon: <Flame className="w-4 h-4" />, switchPct: 0.00, color: "text-orange-400 border-orange-400/40 bg-orange-400/10" },
-];
-
-const GPT4O_COST_PER_REQ = 0.0665;
-const MINI_COST_PER_REQ  = 0.0166;
-const GPT4O_REQUESTS     = 1240;
-
-function applyMode(data: {
-  totalSpend: number; savings: number; savingsPercent: number;
-  autopilotSaved: number; credits: number; avgCost: number; totalRequests: number;
-}, switchPct: number) {
-  const switched   = Math.round(GPT4O_REQUESTS * switchPct);
-  const extraSaved = switched * (GPT4O_COST_PER_REQ - MINI_COST_PER_REQ);
-  const newSpend   = data.totalSpend - extraSaved;
-  const newSavings = data.savings + extraSaved;
-  const originalTotal = data.totalSpend + data.savings;
-  return {
-    totalSpend:     newSpend,
-    savings:        newSavings,
-    savingsPercent: +((newSavings / originalTotal) * 100).toFixed(1),
-    autopilotSaved: data.autopilotSaved + extraSaved,
-    credits:        data.credits + extraSaved,
-    avgCost:        +(newSpend / data.totalRequests).toFixed(4),
-    extraSaved,
-    switched,
-  };
-}
-
-// ─── Spend categories ─────────────────────────────────────────────────────────
-const SPEND_CATEGORIES = [
-  { label: "Writing & Chat",    description: "Drafts, summaries, Q&A",       icon: <MessageSquare className="w-4 h-4" />, pct: 48, amount: 76.10, color: "bg-blue-400",    textColor: "text-blue-400" },
-  { label: "Image Generation",  description: "Visuals, thumbnails, assets",   icon: <Image className="w-4 h-4" />,        pct: 31, amount: 49.10, color: "bg-violet-400",  textColor: "text-violet-400" },
-  { label: "Automation",        description: "Pipelines, agents, scripts",    icon: <Bot className="w-4 h-4" />,          pct: 21, amount: 33.30, color: "bg-emerald-400", textColor: "text-emerald-400" },
-];
-
+// ─── Animated bar ─────────────────────────────────────────────────────────────
 function AnimatedBar({ pct, color }: { pct: number; color: string }) {
   return (
     <div className="h-2.5 rounded-full bg-secondary overflow-hidden">
@@ -89,6 +91,7 @@ function AnimatedBar({ pct, color }: { pct: number; color: string }) {
   );
 }
 
+// ─── Category helpers ─────────────────────────────────────────────────────────
 const categoryIcon = (cat: string) => {
   if (cat === "routing")     return <ArrowRightLeft className="w-4 h-4" />;
   if (cat === "caching")     return <Database className="w-4 h-4" />;
@@ -102,15 +105,21 @@ const categoryColor = (cat: string) => {
   return "text-primary bg-primary/10";
 };
 
-// ─── Page ────────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function makeId() { return `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; }
+function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+function rand(min: number, max: number) { return +(Math.random() * (max - min) + min).toFixed(2); }
+
+function formatRelTime(ts: number) {
+  const diff = Date.now() - ts;
+  if (diff < 60000) return "just now";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  return `${Math.floor(diff / 3600000)}h ago`;
+}
+
+// ─── Outer page (handles loading) ────────────────────────────────────────────
 export default function Home() {
   const { data, isLoading } = useUsageData();
-  const { mutate: optimize, isPending } = useOptimize();
-  const [spendMode, setSpendMode] = useState<SpendMode>("balanced");
-  const [budget, setBudget] = useState(200);
-  const [budgetInput, setBudgetInput] = useState("200");
-  const [editingBudget, setEditingBudget] = useState(false);
-
   if (isLoading || !data) {
     return (
       <Shell>
@@ -120,22 +129,114 @@ export default function Home() {
       </Shell>
     );
   }
+  return <HomeInner data={data} />;
+}
 
-  const activeMode  = MODES.find(m => m.id === spendMode)!;
-  const sim         = applyMode(data, activeMode.switchPct);
+// ─── Inner page (data guaranteed) ────────────────────────────────────────────
+function HomeInner({ data }: { data: UsageData }) {
+  // ── Core wallet state ───────────────────────────────────────────────────────
+  const [balance,      setBalance]      = useState(data.totalSpend);
+  const [totalSaved,   setTotalSaved]   = useState(data.autopilotSaved);
+  const [spendMode,    setSpendMode]    = useState<SpendMode>("balanced");
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [budget,       setBudget]       = useState(200);
+  const [budgetInput,  setBudgetInput]  = useState("200");
+  const [editingBudget, setEditingBudget] = useState(false);
+
+  // ── Transactions (local state, max 10) ─────────────────────────────────────
+  const [transactions, setTransactions] = useState<TxItem[]>(() =>
+    data.activity.slice(0, 6).map((a, i) => ({
+      id: a.id ?? `init-${i}`,
+      label: a.label,
+      amount: a.type === "optimization" ? +a.value.replace(/[^0-9.]/g, "") : -+a.value.replace(/[^0-9.]/g, ""),
+      timestamp: typeof a.timestamp === "number" ? a.timestamp : Date.now() - i * 120000,
+      type: a.type as TxItem["type"],
+    }))
+  );
+
+  const addTxs = useCallback((txs: TxItem[]) => {
+    setTransactions(prev => [...txs, ...prev].slice(0, 10));
+  }, []);
+
+  // ── Optimize Wallet ─────────────────────────────────────────────────────────
+  const handleOptimize = async () => {
+    if (isOptimizing) return;
+    setIsOptimizing(true);
+    try {
+      await new Promise(r => setTimeout(r, 1300));
+      const saveAmt  = rand(2.5, 9.0);
+      const numCosts = Math.random() > 0.45 ? 2 : 1;
+      const newTxs: TxItem[] = [];
+
+      // Savings first (newest)
+      newTxs.push({
+        id: makeId(), label: pick(SAVE_LABELS),
+        amount: saveAmt, timestamp: Date.now(), type: "optimization",
+      });
+
+      // Cost transactions
+      for (let i = 0; i < numCosts; i++) {
+        const cost = rand(0.4, 2.8);
+        newTxs.push({
+          id: makeId(), label: pick(COST_LABELS),
+          amount: -cost, timestamp: Date.now() - (i + 1) * 800, type: "usage",
+        });
+      }
+
+      const netChange = newTxs.reduce((s, t) => s + t.amount, 0);
+      setBalance(prev => +Math.max(0, prev + netChange).toFixed(2));
+      setTotalSaved(prev => +(prev + saveAmt).toFixed(2));
+      addTxs(newTxs);
+    } catch { /* stay stable */ }
+    setIsOptimizing(false);
+  };
+
+  // ── Mode switch ─────────────────────────────────────────────────────────────
+  const handleModeSwitch = (mode: SpendMode) => {
+    if (mode === spendMode) return;
+    const next = MODES.find(m => m.id === mode)!;
+    setSpendMode(mode);
+    addTxs([{
+      id: makeId(),
+      label: `Switched to ${next.label} Mode → ${next.savingsTag}`,
+      amount: 0,
+      timestamp: Date.now(),
+      type: "mode_switch",
+    }]);
+  };
+
+  // ── Auto-tick: small usage every 10 s (pauses when tab hidden) ─────────────
+  useEffect(() => {
+    const tick = () => {
+      if (document.hidden) return;
+      const cost = rand(0.08, 0.65);
+      const tx: TxItem = {
+        id: makeId(), label: pick(COST_LABELS),
+        amount: -cost, timestamp: Date.now(), type: "usage",
+      };
+      setBalance(prev => +(prev + cost).toFixed(2));
+      setTransactions(prev => [tx, ...prev].slice(0, 10));
+    };
+    const iv = setInterval(tick, 10000);
+    return () => clearInterval(iv);
+  }, []);
+
+  // ── Simulation math for mode projection ────────────────────────────────────
+  const activeMode = MODES.find(m => m.id === spendMode)!;
+  const switched   = Math.round(GPT4O_REQS * activeMode.switchPct);
+  const extraSaved = switched * (GPT4O_COST - MINI_COST);
+  const projSpend  = +(balance - extraSaved).toFixed(2);
+  const projSavings = +(totalSaved + extraSaved).toFixed(2);
+  const origTotal  = data.totalSpend + data.savings;
+  const projSavePct = +((projSavings / origTotal) * 100).toFixed(1);
   const isSimulated = spendMode !== "performance";
-  const display     = isSimulated ? sim : data;
-  const insights    = data.savingsInsights;
 
-  // Budget
-  const spend   = display.totalSpend;
-  const usedPct = Math.min((spend / budget) * 100, 100);
+  // ── Budget helpers ──────────────────────────────────────────────────────────
+  const usedPct = Math.min((balance / budget) * 100, 100);
   const budgetStatus =
-    usedPct >= 90
-      ? { label: "You've hit your limit",     icon: <XCircle className="w-4 h-4" />,      color: "text-red-400",    barColor: "bg-red-400",    bg: "bg-red-400/8 border-red-400/25" }
-      : usedPct >= 70
-      ? { label: "You're close to your limit", icon: <TriangleAlert className="w-4 h-4" />, color: "text-yellow-400", barColor: "bg-yellow-400", bg: "bg-yellow-400/8 border-yellow-400/25" }
-      : { label: "You're on track",            icon: <CheckCircle2 className="w-4 h-4" />,  color: "text-success",    barColor: "bg-success",    bg: "bg-success/8 border-success/25" };
+    usedPct >= 90 ? { label: "You've hit your limit",      icon: <XCircle className="w-4 h-4" />,      color: "text-red-400",    barColor: "bg-red-400",    bg: "bg-red-400/8 border-red-400/25" }
+  : usedPct >= 70 ? { label: "You're close to your limit", icon: <TriangleAlert className="w-4 h-4" />, color: "text-yellow-400", barColor: "bg-yellow-400", bg: "bg-yellow-400/8 border-yellow-400/25" }
+  :                 { label: "You're on track",             icon: <CheckCircle2 className="w-4 h-4" />,  color: "text-success",    barColor: "bg-success",    bg: "bg-success/8 border-success/25" };
 
   const commitBudget = () => {
     const v = parseFloat(budgetInput);
@@ -144,6 +245,7 @@ export default function Home() {
     setEditingBudget(false);
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <Shell>
       <header className="mb-6">
@@ -157,37 +259,33 @@ export default function Home() {
         </motion.p>
       </header>
 
-      {/* ── Wallet Card ── */}
+      {/* ── Wallet Card ──────────────────────────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.45 }}
         className="relative rounded-3xl overflow-hidden mb-6"
         style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 30%, #1e1b4b 60%, #0f172a 100%)" }}
       >
-        {/* Glow layers */}
+        {/* Glow */}
         <div className="absolute top-0 left-0 w-72 h-72 bg-indigo-500/20 rounded-full blur-[80px] -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
         <div className="absolute bottom-0 right-0 w-64 h-64 bg-primary/25 rounded-full blur-[60px] translate-x-1/3 translate-y-1/3 pointer-events-none" />
-        {/* Shimmer stripe */}
         <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/3 pointer-events-none" />
 
         <div className="relative z-10 p-6 md:p-8">
-          {/* Card header row */}
+          {/* Card header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-sm">
+              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center">
                 <CreditCard className="w-4 h-4 text-white/80" />
               </div>
               <span className="text-xs font-bold tracking-widest text-white/50 uppercase">AI Spend Wallet</span>
             </div>
             <div className="flex items-center gap-2">
-              {isSimulated && (
-                <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
-                  className="text-xs font-semibold text-indigo-300 bg-indigo-400/15 border border-indigo-400/30 px-2.5 py-1 rounded-full">
-                  {activeMode.label} Mode
-                </motion.span>
-              )}
-              <Wallet className="w-5 h-5 text-white/40" />
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${activeMode.color}`}>
+                {activeMode.label} Mode
+              </span>
+              <Wallet className="w-5 h-5 text-white/30" />
             </div>
           </div>
 
@@ -195,77 +293,82 @@ export default function Home() {
           <div className="mb-8">
             <p className="text-sm text-white/50 mb-1 font-medium tracking-wide">Balance</p>
             <div className="text-5xl md:text-6xl font-display font-black text-white tracking-tight">
-              $<AnimatedNumber value={display.totalSpend} decimals={1} />
+              $<AnimatedNumber value={balance} decimals={1} />
             </div>
             <p className="text-sm text-white/40 mt-1">this month's spend</p>
           </div>
 
-          {/* Bottom stats row */}
-          <div className="flex flex-wrap gap-4 pt-5 border-t border-white/10">
+          {/* Bottom row */}
+          <div className="flex flex-wrap gap-x-6 gap-y-3 pt-5 border-t border-white/10 items-end">
             <div>
-              <p className="text-xs text-white/40 mb-0.5 font-medium uppercase tracking-wide">Available Budget</p>
+              <p className="text-[10px] text-white/40 mb-0.5 font-medium uppercase tracking-wider">Available Budget</p>
               <p className="text-xl font-bold text-white">
-                ${(budget - spend > 0 ? budget - spend : 0).toFixed(1)}
+                ${Math.max(0, budget - balance).toFixed(1)}
               </p>
             </div>
-            <div className="w-px bg-white/10 self-stretch" />
+            <div className="w-px bg-white/10 self-stretch hidden sm:block" />
             <div>
-              <p className="text-xs text-white/40 mb-0.5 font-medium uppercase tracking-wide">Total Saved</p>
+              <p className="text-[10px] text-white/40 mb-0.5 font-medium uppercase tracking-wider">Total Saved</p>
               <p className="text-xl font-bold text-emerald-400">
-                +$<AnimatedNumber value={display.autopilotSaved} decimals={1} />
+                +$<AnimatedNumber value={totalSaved} decimals={1} />
               </p>
             </div>
-            <div className="w-px bg-white/10 self-stretch" />
+            <div className="w-px bg-white/10 self-stretch hidden sm:block" />
             <div>
-              <p className="text-xs text-white/40 mb-0.5 font-medium uppercase tracking-wide">Smart Spend Mode</p>
+              <p className="text-[10px] text-white/40 mb-0.5 font-medium uppercase tracking-wider">Smart Spend Mode</p>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
                 <p className="text-sm font-semibold text-emerald-400">Active</p>
               </div>
             </div>
-            <div className="ml-auto self-end">
-              <button
-                onClick={() => optimize()}
-                disabled={isPending}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-semibold transition-all hover:-translate-y-0.5 disabled:opacity-50 backdrop-blur-sm"
+
+            {/* Optimize Wallet button */}
+            <div className="ml-auto">
+              <motion.button
+                onClick={handleOptimize}
+                disabled={isOptimizing}
+                whileTap={{ scale: 0.94 }}
+                whileHover={{ scale: 1.03 }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/12 hover:bg-white/20 border border-white/25 text-white text-sm font-semibold transition-colors disabled:opacity-60 backdrop-blur-sm"
               >
-                {isPending ? (
-                  <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Optimizing...</>
+                {isOptimizing ? (
+                  <><RefreshCw className="w-3.5 h-3.5 animate-spin" />Optimizing...</>
                 ) : (
                   <><Zap className="w-3.5 h-3.5" />Optimize Wallet</>
                 )}
-              </button>
+              </motion.button>
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* ── Spend Modes ── */}
+      {/* ── Spend Mode Selector ──────────────────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
         className="glass-panel rounded-2xl p-5 mb-6"
       >
         <div className="flex items-center gap-2 mb-4">
-          <FlaskConical className="w-4 h-4 text-muted-foreground" />
+          <Sparkles className="w-4 h-4 text-muted-foreground" />
           <p className="text-sm font-semibold text-foreground">Spend Mode</p>
-          <span className="text-xs text-muted-foreground ml-1">— affects routing & savings projection</span>
+          <span className="text-xs text-muted-foreground">— affects routing & savings projection</span>
         </div>
+
         <div className="grid grid-cols-3 gap-3">
           {MODES.map((mode) => {
             const active = spendMode === mode.id;
             return (
-              <button
+              <motion.button
                 key={mode.id}
-                onClick={() => setSpendMode(mode.id)}
+                onClick={() => handleModeSwitch(mode.id)}
+                whileTap={{ scale: 0.96 }}
                 className={`relative rounded-xl border p-3 text-left transition-all duration-200 ${
                   active ? mode.color : "border-border/40 bg-secondary/30 text-muted-foreground hover:border-border hover:bg-secondary/60"
                 }`}
               >
                 {active && (
                   <motion.div layoutId="mode-active"
-                    className="absolute inset-0 rounded-xl border-2 border-current opacity-30"
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
+                    className="absolute inset-0 rounded-xl border-2 border-current opacity-25"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }} />
                 )}
                 <div className="flex items-center gap-2 mb-1">
                   {mode.icon}
@@ -278,23 +381,23 @@ export default function Home() {
                     Routing {Math.round(mode.switchPct * 100)}% to mini
                   </p>
                 )}
-              </button>
+              </motion.button>
             );
           })}
         </div>
 
-        {/* Impact preview row when not performance mode */}
+        {/* Projection row */}
         {isSimulated && (
           <motion.div
             initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
             transition={{ duration: 0.25 }}
-            className="mt-4 pt-4 border-t border-border/40 grid grid-cols-2 md:grid-cols-4 gap-2"
+            className="mt-4 pt-4 border-t border-border/40 grid grid-cols-2 md:grid-cols-4 gap-2 overflow-hidden"
           >
             {[
-              { label: "Projected Balance", value: formatCurrency(sim.totalSpend),   delta: `-${formatCurrency(sim.extraSaved)}` },
-              { label: "Total Saved",       value: formatCurrency(sim.savings),      delta: `+${formatCurrency(sim.extraSaved)}` },
-              { label: "Savings Rate",      value: `${sim.savingsPercent}%`,         delta: `+${(sim.savingsPercent - data.savingsPercent).toFixed(1)}%` },
-              { label: "Requests Re-routed", value: formatNumber(sim.switched),     delta: "to mini" },
+              { label: "Projected Balance",   value: formatCurrency(projSpend),    delta: `-${formatCurrency(extraSaved)}` },
+              { label: "Total Saved",         value: formatCurrency(projSavings),  delta: `+${formatCurrency(extraSaved)}` },
+              { label: "Savings Rate",        value: `${projSavePct}%`,            delta: `+${(projSavePct - data.savingsPercent).toFixed(1)}%` },
+              { label: "Requests Re-routed",  value: formatNumber(switched),       delta: "to mini" },
             ].map((item) => (
               <div key={item.label} className="bg-primary/6 rounded-xl px-3 py-2.5">
                 <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
@@ -308,23 +411,22 @@ export default function Home() {
         )}
       </motion.div>
 
-      {/* ── Stats Grid ── */}
+      {/* ── Stats Grid ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <StatCard delay={0.2} title="Available Credits"
-          value={`$${display.credits.toFixed(1)}`}
+          value={`$${(data.credits + (isSimulated ? extraSaved : 0)).toFixed(1)}`}
           icon={<Wallet className="w-4 h-4" />} />
         <StatCard delay={0.3} title="Avg Cost / Request"
-          value={`$${display.avgCost.toFixed(3)}`}
-          trend={{ value: isSimulated ? `-${(((data.avgCost - sim.avgCost) / data.avgCost) * 100).toFixed(1)}%` : "-4.2%", isPositive: true }} />
-        <StatCard delay={0.4} title="Top Tool"
-          value={data.topTool}
+          value={`$${isSimulated ? (projSpend / data.totalRequests).toFixed(3) : data.avgCost.toFixed(3)}`}
+          trend={{ value: isSimulated ? `-${(((data.avgCost - projSpend / data.totalRequests) / data.avgCost) * 100).toFixed(1)}%` : "-4.2%", isPositive: true }} />
+        <StatCard delay={0.4} title="Top Tool" value={data.topTool}
           icon={<BrainCircuit className="w-4 h-4" />}
           className="whitespace-nowrap overflow-hidden text-ellipsis" />
       </div>
 
-      {/* ── Monthly Budget ── */}
+      {/* ── Monthly Budget ───────────────────────────────────────────────────── */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.41 }}
+        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
         className={`glass-panel rounded-2xl p-6 mb-6 border transition-colors duration-500 ${budgetStatus.bg}`}
       >
         <div className="flex items-center justify-between gap-4 flex-wrap mb-5">
@@ -363,8 +465,8 @@ export default function Home() {
         </div>
         <div className="mb-3">
           <div className="flex justify-between text-xs text-muted-foreground mb-2">
-            <span>{formatCurrency(spend)} used</span>
-            <span>{formatCurrency(budget - spend > 0 ? budget - spend : 0)} remaining</span>
+            <span>{formatCurrency(balance)} used</span>
+            <span>{formatCurrency(Math.max(0, budget - balance))} remaining</span>
           </div>
           <div className="h-3 rounded-full bg-secondary overflow-hidden">
             <motion.div className={`h-full rounded-full transition-colors duration-500 ${budgetStatus.barColor}`}
@@ -382,15 +484,15 @@ export default function Home() {
           <span>{budgetStatus.label}</span>
           {usedPct < 70 && (
             <span className="text-xs text-muted-foreground font-normal ml-1">
-              — {formatCurrency(budget - spend)} left this month
+              — {formatCurrency(Math.max(0, budget - balance))} left this month
             </span>
           )}
         </div>
       </motion.div>
 
-      {/* ── Where money is going ── */}
+      {/* ── Where money is going ─────────────────────────────────────────────── */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.42 }}
+        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
         className="glass-panel rounded-2xl p-6 mb-6"
       >
         <div className="flex items-center justify-between mb-6">
@@ -404,12 +506,10 @@ export default function Home() {
           {SPEND_CATEGORIES.map((cat, i) => (
             <motion.div key={cat.label}
               initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.48 + i * 0.08 }}>
+              transition={{ delay: 0.45 + i * 0.08 }}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2.5">
-                  <div className={`p-1.5 rounded-lg ${cat.textColor}`} style={{ background: "currentColor" }}>
-                    <span style={{ color: "white" }}>{cat.icon}</span>
-                  </div>
+                  <div className={`p-1.5 rounded-lg bg-current/15 ${cat.textColor}`}>{cat.icon}</div>
                   <div>
                     <p className="text-sm font-medium text-foreground">{cat.label}</p>
                     <p className="text-xs text-muted-foreground">{cat.description}</p>
@@ -426,9 +526,9 @@ export default function Home() {
         </div>
       </motion.div>
 
-      {/* ── Savings Insights ── */}
+      {/* ── Savings Insights ─────────────────────────────────────────────────── */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}
+        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.44 }}
         className="glass-panel rounded-2xl p-6 mb-6"
       >
         <div className="flex items-center gap-2 mb-6">
@@ -436,10 +536,8 @@ export default function Home() {
           <h2 className="text-xl font-display font-bold text-foreground">Savings Insights</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-          {insights.topSavings.map((item, i) => (
-            <motion.div key={item.label}
-              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 + i * 0.08 }}
+          {data.savingsInsights.topSavings.map((item, i) => (
+            <div key={item.label}
               className="flex items-start gap-3 p-4 rounded-xl bg-secondary/40 border border-border/40">
               <div className={`p-2 rounded-lg flex-shrink-0 ${categoryColor(item.category)}`}>
                 {categoryIcon(item.category)}
@@ -448,7 +546,7 @@ export default function Home() {
                 <p className="text-sm text-muted-foreground leading-snug">{item.label}</p>
                 <p className="text-lg font-bold text-success mt-1">{formatCurrency(item.savedAmount)} saved</p>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -458,7 +556,7 @@ export default function Home() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Estimated Wasted Spend</p>
-              <p className="text-xl font-bold text-red-400">{formatCurrency(insights.wastedSpend)}</p>
+              <p className="text-xl font-bold text-red-400">{formatCurrency(data.savingsInsights.wastedSpend)}</p>
               <p className="text-xs text-muted-foreground mt-0.5">requests that could be cheaper</p>
             </div>
           </div>
@@ -468,28 +566,90 @@ export default function Home() {
             </div>
             <div>
               <p className="text-sm font-medium text-primary mb-1">Recommendation</p>
-              <p className="text-sm text-foreground leading-relaxed">{insights.recommendation}</p>
+              <p className="text-sm text-foreground leading-relaxed">{data.savingsInsights.recommendation}</p>
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* ── Transactions ── */}
+      {/* ── Transactions ─────────────────────────────────────────────────────── */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.48 }}
         className="glass-panel rounded-2xl p-6"
       >
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <Receipt className="w-5 h-5 text-muted-foreground" />
             <h2 className="text-xl font-display font-bold text-foreground">Transactions</h2>
+            <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
+              {transactions.length}/10
+            </span>
           </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground bg-secondary px-3 py-1.5 rounded-full">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-secondary px-3 py-1.5 rounded-full">
             <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
             Live
           </div>
         </div>
-        <ActivityFeed items={data.activity.slice(0, 5)} />
+
+        <div className="space-y-2">
+          <AnimatePresence initial={false}>
+            {transactions.map((tx) => {
+              const isSave   = tx.type === "optimization";
+              const isMode   = tx.type === "mode_switch";
+              const isSpend  = tx.type === "usage";
+
+              return (
+                <motion.div
+                  key={tx.id}
+                  initial={{ opacity: 0, y: -12, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                  className="flex items-center justify-between px-4 py-3 rounded-xl bg-card/30 border border-border/30 hover:bg-card/60 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      isSave  ? "bg-success/15 text-success" :
+                      isMode  ? "bg-primary/15 text-primary" :
+                                "bg-secondary text-muted-foreground"
+                    }`}>
+                      {isSave  && <ArrowDownRight className="w-4 h-4" />}
+                      {isMode  && <Sparkles className="w-4 h-4" />}
+                      {isSpend && <ArrowUpRight className="w-4 h-4" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground leading-snug">{tx.label}</p>
+                      <p className="text-xs text-muted-foreground">{formatRelTime(tx.timestamp)}</p>
+                    </div>
+                  </div>
+
+                  {tx.amount !== 0 && (
+                    <div className={`text-sm font-bold font-mono flex items-center gap-0.5 ${
+                      isSave ? "text-success" : "text-muted-foreground"
+                    }`}>
+                      {isSave  && <span className="text-success">+</span>}
+                      {isSpend && <span className="text-red-400/80">-</span>}
+                      <span className={isSpend ? "text-red-400" : undefined}>
+                        ${Math.abs(tx.amount).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  {tx.amount === 0 && (
+                    <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-full">
+                      mode
+                    </span>
+                  )}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+
+          {transactions.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              No transactions yet — click Optimize Wallet to start.
+            </div>
+          )}
+        </div>
       </motion.div>
     </Shell>
   );

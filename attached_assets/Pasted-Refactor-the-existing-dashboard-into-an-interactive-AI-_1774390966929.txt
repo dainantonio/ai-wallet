@@ -1,0 +1,71 @@
+Refactor the existing dashboard into an interactive AI Wallet experience.
+
+1. Update UI Labels:
+- Change "Spend" to "Balance"
+- Change "Activity" to "Transactions"
+- Change "Autopilot" to "Smart Spend"
+- Change CTA button text to "Optimize Wallet"
+
+2. Wallet Card:
+- Create a main wallet card showing:
+  - Balance
+  - Available budget
+  - Saved today
+- Style with gradient background, rounded corners, subtle glow
+- Animate values on load using Framer Motion
+
+3. Smart Spend Mode (INTERACTIVE):
+- Add 3 selectable modes:
+  - Saver (low cost)
+  - Balanced (default)
+  - Performance (high quality)
+- Store selected mode in React state
+- Highlight active mode visually
+- When user switches modes:
+  - Trigger a small animation
+  - Add a new transaction log like:
+    "Switched to Saver Mode → saving more"
+
+4. Transactions (Dynamic):
+- Convert activity feed into transaction list
+- Each transaction includes:
+  - label
+  - amount (+ green for savings, - red for spend)
+  - timestamp
+- Store transactions in state (max 10 items)
+- New transactions should animate in (slide/fade)
+
+5. Optimize Wallet Button (CORE INTERACTION):
+- On click:
+  - Simulate optimization
+  - Randomly generate:
+    - 1–2 cost transactions (-$)
+    - 1 optimization saving (+$)
+  - Update balance and saved amount
+  - Add transactions to top of list
+- Add loading animation (spinner or scale effect)
+- Disable button while running
+
+6. Lightweight Logic (IMPORTANT):
+- Keep all data in React state (no heavy backend calls)
+- Limit total transactions to 10 max
+- Use simple random number generation for simulation
+
+7. Live Feel (Free Tier Safe):
+- Add optional interval (every 10 seconds max):
+  - randomly add a small usage transaction
+- Pause updates if user is inactive or tab is hidden
+
+8. Animations:
+- Use Framer Motion for:
+  - transaction entry animation
+  - button press feedback
+  - mode switching highlight
+- Keep animations lightweight
+
+9. Error Handling:
+- If any simulation fails, do not crash UI
+- Show fallback message: "Simulation running locally"
+
+Goal:
+Create a smooth, interactive AI Wallet experience that feels like a fintech app, demonstrates clear value (saving money), and is optimized for Replit Free Tier performance.
