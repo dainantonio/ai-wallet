@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface ModelUsage {
+  model: string;
+  requests: number;
+  percentage: number;
+  avgLatency: number;
+  cost: number;
 }

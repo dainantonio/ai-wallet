@@ -1,0 +1,138 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+
+  --font-sans: 'Manrope', sans-serif;
+  --font-display: 'Plus Jakarta Sans', sans-serif;
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+:root {
+  /* Enforce Dark Mode for the entire application as per requirements */
+  color-scheme: dark;
+  
+  /* Very dark, sleek backdrop */
+  --background: 224 35% 4%;
+  --foreground: 210 40% 98%;
+  
+  /* Panels and cards are slightly elevated with minimal contrast */
+  --card: 224 30% 7%;
+  --card-foreground: 210 40% 98%;
+  
+  --popover: 224 30% 7%;
+  --popover-foreground: 210 40% 98%;
+  
+  /* Sharp, subtle borders */
+  --border: 220 20% 14%;
+  --input: 220 20% 14%;
+  
+  /* Primary electric indigo/blue */
+  --primary: 235 85% 65%;
+  --primary-foreground: 0 0% 100%;
+  
+  /* Secondary sleek gray */
+  --secondary: 220 20% 12%;
+  --secondary-foreground: 210 40% 98%;
+  
+  /* Muted elements */
+  --muted: 220 20% 12%;
+  --muted-foreground: 215 20% 65%;
+  
+  /* Accents */
+  --accent: 235 85% 65%;
+  --accent-foreground: 210 40% 98%;
+  
+  /* Status Colors */
+  --destructive: 350 85% 60%;
+  --destructive-foreground: 0 0% 100%;
+  
+  /* Neon emerald for active/saving states */
+  --success: 150 85% 45%;
+  --success-foreground: 0 0% 100%;
+  
+  --ring: 235 85% 65%;
+  --radius: 1rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground antialiased font-sans overflow-x-hidden;
+    /* Custom scrollbar for webkit */
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+    &::-webkit-scrollbar-track {
+      background: hsl(var(--background));
+    }
+    &::-webkit-scrollbar-thumb {
+      background: hsl(var(--border));
+      border-radius: 4px;
+    }
+    &::-webkit-scrollbar-thumb:hover {
+      background: hsl(var(--muted-foreground));
+    }
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply tracking-tight font-bold;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-card/60 backdrop-blur-xl border border-border/50 shadow-2xl shadow-black/40;
+  }
+  
+  .neon-glow {
+    box-shadow: 0 0 40px -10px hsl(var(--primary) / 0.4);
+  }
+  
+  .success-glow {
+    box-shadow: 0 0 30px -10px hsl(var(--success) / 0.3);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-white/60;
+  }
+  
+  .text-gradient-primary {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-indigo-400;
+  }
+}

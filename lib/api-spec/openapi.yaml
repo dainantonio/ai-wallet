@@ -1,15 +1,18 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: AI Spend Autopilot API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: usage
+    description: Usage and activity operations
+  - name: optimize
+    description: Optimization operations
 paths:
   /healthz:
     get:
@@ -24,6 +27,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /usage:
+    get:
+      operationId: getUsage
+      tags: [usage]
+      summary: Get usage data
+      description: Returns usage stats and activity log
+      responses:
+        "200":
+          description: Usage data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageData"
+  /optimize:
+    post:
+      operationId: runOptimization
+      tags: [optimize]
+      summary: Run optimization
+      description: Triggers an optimization pass and returns new activity items
+      responses:
+        "200":
+          description: Optimization result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OptimizationResult"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +62,100 @@ components:
           type: string
       required:
         - status
-
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [usage, optimization, alert]
+        label:
+          type: string
+        value:
+          type: string
+        timestamp:
+          type: string
+      required:
+        - id
+        - type
+        - label
+        - value
+        - timestamp
+    ModelUsage:
+      type: object
+      properties:
+        model:
+          type: string
+        requests:
+          type: integer
+        percentage:
+          type: number
+        avgLatency:
+          type: number
+        cost:
+          type: number
+      required:
+        - model
+        - requests
+        - percentage
+        - avgLatency
+        - cost
+    UsageData:
+      type: object
+      properties:
+        totalRequests:
+          type: integer
+        avgLatency:
+          type: number
+        totalSpend:
+          type: number
+        savings:
+          type: number
+        savingsPercent:
+          type: number
+        autopilotSaved:
+          type: number
+        credits:
+          type: number
+        avgCost:
+          type: number
+        topTool:
+          type: string
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelUsage"
+        activity:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityItem"
+      required:
+        - totalRequests
+        - avgLatency
+        - totalSpend
+        - savings
+        - savingsPercent
+        - autopilotSaved
+        - credits
+        - avgCost
+        - topTool
+        - models
+        - activity
+    OptimizationResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        newItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityItem"
+        totalActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityItem"
+      required:
+        - success
+        - newItems
+        - totalActivity

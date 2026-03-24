@@ -1,0 +1,8 @@
+packages:
+  "framer-motion": "For high-quality layout transitions and animated activity feeds"
+  "clsx": "For constructing className strings conditionally"
+  "tailwind-merge": "For merging tailwind classes without conflicts"
+
+notes:
+  - App implements a simulated backend fallback mechanism if the actual API endpoints are missing or return 404s, ensuring the UI remains fully functional and demonstrable.
+  - Using Plus Jakarta Sans (display) and Manrope (body) for a sleek, modern fintech aesthetic.

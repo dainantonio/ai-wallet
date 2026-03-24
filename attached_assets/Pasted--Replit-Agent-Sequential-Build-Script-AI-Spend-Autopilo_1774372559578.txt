@@ -1,0 +1,75 @@
+# Replit Agent Sequential Build Script — AI Spend Autopilot (Free Tier Optimized)
+
+# --- Step 1: Scaffold Project ---
+You are my Replit Agent. Create a new React + Tailwind project with Framer Motion installed. Scaffold main pages/components: Home, Usage, Alerts, Autopilot. Include a simple App.jsx that routes between pages via state. Keep project lightweight for Replit Free Tier.
+
+# --- Step 2: Create Reusable Components ---
+Create reusable React components:
+- StatCard: shows label, value, optional icon
+- ActivityRow: shows label, type (usage/optimization/alert), value, timestamp
+- NavItem: shows icon + label, highlights when active
+Use Tailwind for styling. Include placeholder icons from lucide-react. Keep components lightweight.
+
+# --- Step 3: Add Mock Data ---
+Create a small mock dataset for testing:
+- 5–6 activity items with fields: id, type, label, value, timestamp
+- Types: usage, optimization, alert
+Keep data in-memory. Display in ActivityRow component on Home page.
+
+# --- Step 4: Build Home Page ---
+Use components to build Home page:
+- Spend Card: shows this month spend, savings percentage
+- Autopilot Card: shows autopilot active, saved amount
+- Stats Grid: Credits, Avg Cost, Top Tool
+- Live Activity Feed: displays mock activity items, max 5 items
+Use Framer Motion for subtle animations. Layout responsive and lightweight.
+
+# --- Step 5: Build Usage Page ---
+Create Usage page:
+- Show total requests, average latency
+- Usage breakdown by model (GPT-4o, Claude 3.5, Gemini 1.5 Pro)
+- Use small progress bars (<50px height)
+- Display last 5–10 activity logs using ActivityRow
+Keep dataset in-memory, max 10 items.
+
+# --- Step 6: Build Alerts Page ---
+Create Alerts page:
+- Show alert rules (Budget Threshold, Spike Detection, Model Drift)
+- Toggle ON/OFF, highlight active alerts (emerald), inactive (zinc)
+- Include small Active Alert card simulating alert message
+Keep layout simple and memory-light.
+
+# --- Step 7: Build Autopilot Page ---
+Create Autopilot config page:
+- Smart Routing & Semantic Caching toggles
+- Description text under each toggle
+- Airtable Connection card (button only, no live integration)
+Toggles update React state. Keep lightweight for Free Tier.
+
+# --- Step 8: Implement In-Memory Backend Simulation ---
+Simulate backend using in-memory arrays:
+- /api/usage returns mock activity items
+- /api/optimize simulates optimization, randomly adds optimization items
+Limit activity log to max 10 items. No database.
+
+# --- Step 9: Integrate Frontend with Simulated Backend ---
+Fetch /api/usage on Home & Usage pages. Add "Run Optimization" button calling /api/optimize.
+- Display new activity items after optimization
+- Animate new rows with Framer Motion
+- Limit fetch intervals to 8–10 sec max
+Include error handling that falls back to in-memory simulation if fetch fails.
+
+# --- Step 10: Final UI & Polish ---
+Add polish:
+- Hover animations on buttons/cards
+- Subtle glow for active autopilot card
+- Progress bars animate 0 → value on mount
+- Use vector/lightweight icons/images
+Test mobile width 375–420px. Ensure memory under Free Tier limits.
+
+# --- Optional Airtable Connection (Free Tier Safe) ---
+Include Airtable button on Autopilot page:
+- No live fetch
+- Simulate success/failure on click
+- Keep data in-memory
+Ensures Free Tier compliance, shows feature readiness.
