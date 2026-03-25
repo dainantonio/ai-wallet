@@ -10,7 +10,8 @@ import {
   Lightbulb, AlertTriangle, ChevronRight,
   MessageSquare, Image, Bot, Target, CheckCircle2,
   TriangleAlert, XCircle, Gauge, Leaf, Flame,
-  CreditCard, Receipt, ArrowDownRight, ArrowUpRight, RefreshCw,
+  CreditCard, Receipt, ArrowDownRight, ArrowUpRight,
+  Play, Plus, RefreshCw, X,
 } from "lucide-react";
 import { motion, AnimatePresence, animate as motionAnimate } from "framer-motion";
 import type { UsageData } from "@workspace/api-client-react/src/generated/api.schemas";
@@ -23,7 +24,7 @@ interface WalletTx {
   label: string;
   amount: number;
   timestamp: number;
-  type: "optimization" | "usage" | "mode_switch";
+  type: "optimization" | "usage" | "mode_switch" | "deposit";
 }
 
 interface WalletState {
@@ -59,14 +60,16 @@ const SPEND_CATEGORIES = [
   { label: "Automation",       description: "Pipelines, agents, scripts",  icon: <Bot className="w-4 h-4" />,          pct: 21, amount: 33.30, color: "bg-emerald-400", textColor: "text-emerald-400" },
 ];
 
+const FUNDS_OPTIONS = [10, 25, 50, 100];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function makeId() { return `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; }
 function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 function rand(min: number, max: number) { return +(Math.random() * (max - min) + min).toFixed(2); }
 function formatRelTime(ts: number) {
   const d = Date.now() - ts;
-  if (d < 60000) return "just now";
-  if (d < 3600000) return `${Math.floor(d / 60000)}m ago`;
+  if (d < 60000)    return "just now";
+  if (d < 3600000)  return `${Math.floor(d / 60000)}m ago`;
   return `${Math.floor(d / 3600000)}h ago`;
 }
 
@@ -81,7 +84,7 @@ function AnimatedNumber({ value, prefix = "", suffix = "", decimals = 0 }: {
     prevRef.current = value;
     if (!ref.current || from === value) return;
     const ctrl = motionAnimate(from, value, {
-      duration: 0.6, ease: "easeOut",
+      duration: 0.7, ease: "easeOut",
       onUpdate(v) { if (ref.current) ref.current.textContent = prefix + v.toFixed(decimals) + suffix; },
     });
     return () => ctrl.stop();
@@ -112,6 +115,48 @@ const categoryColor = (cat: string) => {
   return "text-primary bg-primary/10";
 };
 
+// ─── Action Button ────────────────────────────────────────────────────────────
+interface ActionBtnProps {
+  icon: React.ReactNode;
+  label: string;
+  desc: string;
+  loading: boolean;
+  accent: string;           // tailwind text color e.g. "text-orange-400"
+  border: string;           // tailwind border color e.g. "border-orange-400/30"
+  bg: string;               // tailwind bg e.g. "bg-orange-400/8"
+  iconBg: string;           // icon container bg
+  onClick: () => void;
+  disabled?: boolean;
+  badge?: string;
+}
+function ActionBtn({ icon, label, desc, loading, accent, border, bg, iconBg, onClick, disabled, badge }: ActionBtnProps) {
+  return (
+    <motion.button
+      onClick={onClick}
+      disabled={loading || disabled}
+      whileTap={{ scale: 0.95 }}
+      whileHover={{ scale: 1.02, y: -1 }}
+      className={`relative flex flex-col items-center gap-2.5 px-4 py-4 rounded-2xl border ${border} ${bg} transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-center overflow-hidden group w-full`}
+    >
+      {/* Subtle shine on hover */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/0 via-white/3 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+      <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${accent}`}>
+        {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : icon}
+      </div>
+      <div>
+        <div className="flex items-center justify-center gap-1.5">
+          <p className={`text-sm font-bold ${loading ? "text-muted-foreground" : accent}`}>{label}</p>
+          {badge && !loading && (
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${iconBg} ${accent}`}>{badge}</span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">{loading ? "Working…" : desc}</p>
+      </div>
+    </motion.button>
+  );
+}
+
 // ─── Outer shell (loads usage data) ──────────────────────────────────────────
 export default function Home() {
   const { data, isLoading } = useUsageData();
@@ -131,12 +176,32 @@ export default function Home() {
 function HomeInner({ data }: { data: UsageData }) {
   const { user } = useAuthContext();
 
-  // ── Wallet state (fetched from /api/wallet) ─────────────────────────────
-  const [wallet, setWallet]       = useState<WalletState | null>(null);
+  // ── Wallet state ────────────────────────────────────────────────────────
+  const [wallet, setWallet]           = useState<WalletState | null>(null);
   const [walletLoading, setWalletLoading] = useState(true);
-  const [isOptimizing, setIsOptimizing]   = useState(false);
 
-  // ── Local UI state ──────────────────────────────────────────────────────
+  // ── Action loading states ───────────────────────────────────────────────
+  const [isRunningTask, setIsRunningTask]   = useState(false);
+  const [isAddingFunds, setIsAddingFunds]   = useState(false);
+  const [isOptimizing, setIsOptimizing]     = useState(false);
+
+  // ── Savings tip ─────────────────────────────────────────────────────────
+  const [savingsTip, setSavingsTip]         = useState<string | null>(null);
+  const tipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── New tx highlighting (ids expire after 3 s) ──────────────────────────
+  const [newTxIds, setNewTxIds]             = useState<Set<string>>(new Set());
+  const highlightTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // ── Balance flash ───────────────────────────────────────────────────────
+  const [balanceFlash, setBalanceFlash]     = useState<"up" | "down" | null>(null);
+  const prevBalanceRef = useRef<number | null>(null);
+
+  // ── Funds amount selector ───────────────────────────────────────────────
+  const [fundsAmt, setFundsAmt]             = useState(25);
+  const [showFundsMenu, setShowFundsMenu]   = useState(false);
+
+  // ── Local UI ────────────────────────────────────────────────────────────
   const [budget, setBudget]           = useState(200);
   const [budgetInput, setBudgetInput] = useState("200");
   const [editingBudget, setEditingBudget] = useState(false);
@@ -145,40 +210,110 @@ function HomeInner({ data }: { data: UsageData }) {
   useEffect(() => {
     fetch("/api/wallet", { credentials: "include" })
       .then(r => r.json() as Promise<WalletState>)
-      .then(setWallet)
+      .then((w) => { setWallet(w); prevBalanceRef.current = w.balance; })
       .catch(() => {})
       .finally(() => setWalletLoading(false));
   }, []);
 
-  // ── Auto-tick: add small usage tx every 10 s (local only) ───────────────
+  // ── Auto-tick: local usage trickle every 10 s ───────────────────────────
   useEffect(() => {
     const tick = () => {
       if (document.hidden || !wallet) return;
-      const cost = rand(0.08, 0.65);
+      const cost = +rand(0.08, 0.65);
       const tx: WalletTx = { id: makeId(), label: pick(COST_LABELS), amount: -cost, timestamp: Date.now(), type: "usage" };
-      setWallet(prev => prev ? {
-        ...prev,
-        balance: +(prev.balance + cost).toFixed(2),
-        transactions: [tx, ...prev.transactions].slice(0, 10),
-      } : prev);
+      applyWalletUpdate({ ...wallet, balance: +(wallet.balance + cost).toFixed(2), transactions: [tx, ...wallet.transactions].slice(0, 10) });
     };
     const iv = setInterval(tick, 10000);
     return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet]);
 
-  // ── Optimize Wallet ─────────────────────────────────────────────────────
+  // ── Apply wallet update + side effects ──────────────────────────────────
+  const applyWalletUpdate = useCallback((updated: WalletState, newIds?: string[]) => {
+    setWallet(prev => {
+      const prevBal = prev?.balance ?? null;
+      if (prevBal !== null && prevBal !== updated.balance) {
+        const dir = updated.balance > prevBal ? "up" : "down";
+        setBalanceFlash(dir);
+        setTimeout(() => setBalanceFlash(null), 900);
+      }
+      prevBalanceRef.current = updated.balance;
+      return updated;
+    });
+
+    if (newIds?.length) {
+      setNewTxIds(prev => {
+        const next = new Set(prev);
+        newIds.forEach(id => next.add(id));
+        return next;
+      });
+      newIds.forEach(id => {
+        if (highlightTimers.current.has(id)) clearTimeout(highlightTimers.current.get(id)!);
+        const t = setTimeout(() => {
+          setNewTxIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+          highlightTimers.current.delete(id);
+        }, 3000);
+        highlightTimers.current.set(id, t);
+      });
+    }
+  }, []);
+
+  // ── Show savings tip ─────────────────────────────────────────────────────
+  const showTip = useCallback((tip: string) => {
+    setSavingsTip(tip);
+    if (tipTimerRef.current) clearTimeout(tipTimerRef.current);
+    tipTimerRef.current = setTimeout(() => setSavingsTip(null), 10000);
+  }, []);
+
+  // ── Action: Run AI Task ──────────────────────────────────────────────────
+  const handleRunTask = useCallback(async () => {
+    if (isRunningTask || !wallet) return;
+    setIsRunningTask(true);
+    try {
+      const res = await fetch("/api/wallet/task", { method: "POST", credentials: "include" });
+      if (res.ok) {
+        const { wallet: updated, newTransaction } = await res.json() as { wallet: WalletState; newTransaction: WalletTx };
+        applyWalletUpdate(updated, [newTransaction.id]);
+      }
+    } catch { /* stay stable */ }
+    setIsRunningTask(false);
+  }, [isRunningTask, wallet, applyWalletUpdate]);
+
+  // ── Action: Add Funds ────────────────────────────────────────────────────
+  const handleAddFunds = useCallback(async (amount: number) => {
+    if (isAddingFunds || !wallet) return;
+    setIsAddingFunds(true);
+    setShowFundsMenu(false);
+    try {
+      const res = await fetch("/api/wallet/funds", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+      if (res.ok) {
+        const { wallet: updated, newTransaction } = await res.json() as { wallet: WalletState; newTransaction: WalletTx };
+        applyWalletUpdate(updated, [newTransaction.id]);
+      }
+    } catch { /* stay stable */ }
+    setIsAddingFunds(false);
+  }, [isAddingFunds, wallet, applyWalletUpdate]);
+
+  // ── Action: Optimize Spend ───────────────────────────────────────────────
   const handleOptimize = useCallback(async () => {
-    if (isOptimizing) return;
+    if (isOptimizing || !wallet) return;
     setIsOptimizing(true);
     try {
       const res = await fetch("/api/wallet/optimize", { method: "POST", credentials: "include" });
       if (res.ok) {
-        const { wallet: updated } = await res.json() as { wallet: WalletState };
-        setWallet(updated);
+        const { wallet: updated, newTransactions, tip } = await res.json() as {
+          wallet: WalletState; newTransactions: WalletTx[]; tip: string;
+        };
+        applyWalletUpdate(updated, newTransactions.map(t => t.id));
+        if (tip) showTip(tip);
       }
     } catch { /* stay stable */ }
     setIsOptimizing(false);
-  }, [isOptimizing]);
+  }, [isOptimizing, wallet, applyWalletUpdate, showTip]);
 
   // ── Mode switch ─────────────────────────────────────────────────────────
   const handleModeSwitch = useCallback(async (mode: SpendMode) => {
@@ -191,10 +326,10 @@ function HomeInner({ data }: { data: UsageData }) {
       });
       if (res.ok) {
         const { wallet: updated } = await res.json() as { wallet: WalletState };
-        setWallet(updated);
+        applyWalletUpdate(updated);
       }
     } catch { /* stay stable */ }
-  }, [wallet?.spendMode]);
+  }, [wallet?.spendMode, applyWalletUpdate]);
 
   // ── Budget helpers ──────────────────────────────────────────────────────
   const commitBudget = () => {
@@ -225,9 +360,7 @@ function HomeInner({ data }: { data: UsageData }) {
   : usedPct >= 70 ? { label: "You're close to your limit", icon: <TriangleAlert className="w-4 h-4" />, color: "text-yellow-400", barColor: "bg-yellow-400", bg: "bg-yellow-400/8 border-yellow-400/25" }
   :                 { label: "You're on track",             icon: <CheckCircle2 className="w-4 h-4" />,  color: "text-success",    barColor: "bg-success",    bg: "bg-success/8 border-success/25" };
 
-  const displayName = user?.firstName
-    ? `${user.firstName}'s Wallet`
-    : "My AI Wallet";
+  const displayName = user?.firstName ? `${user.firstName}'s Wallet` : "My AI Wallet";
 
   if (walletLoading) {
     return (
@@ -254,10 +387,9 @@ function HomeInner({ data }: { data: UsageData }) {
 
       {/* ── Wallet Card ── */}
       <motion.div
-        initial={{ opacity: 0, y: 20, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
+        initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.45 }}
-        className="relative rounded-3xl overflow-hidden mb-6"
+        className="relative rounded-3xl overflow-hidden mb-5"
         style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 30%, #1e1b4b 60%, #0f172a 100%)" }}
       >
         <div className="absolute top-0 left-0 w-72 h-72 bg-indigo-500/20 rounded-full blur-[80px] -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
@@ -280,10 +412,28 @@ function HomeInner({ data }: { data: UsageData }) {
             </div>
           </div>
 
+          {/* Balance */}
           <div className="mb-8">
             <p className="text-sm text-white/50 mb-1 font-medium tracking-wide">Balance</p>
-            <div className="text-5xl md:text-6xl font-display font-black text-white tracking-tight">
-              $<AnimatedNumber value={balance} decimals={1} />
+            <div className="relative inline-block">
+              {/* Flash ring */}
+              <AnimatePresence>
+                {balanceFlash && (
+                  <motion.div
+                    key={balanceFlash}
+                    initial={{ opacity: 0.8, scale: 0.95 }}
+                    animate={{ opacity: 0, scale: 1.15 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.7 }}
+                    className={`absolute inset-0 rounded-xl pointer-events-none ${balanceFlash === "up" ? "bg-emerald-400/20" : "bg-red-400/20"}`}
+                  />
+                )}
+              </AnimatePresence>
+              <div className={`text-5xl md:text-6xl font-display font-black tracking-tight transition-colors duration-300 ${
+                balanceFlash === "up" ? "text-emerald-300" : balanceFlash === "down" ? "text-red-300" : "text-white"
+              }`}>
+                $<AnimatedNumber value={balance} decimals={1} />
+              </div>
             </div>
             <p className="text-sm text-white/40 mt-1">this month's spend</p>
           </div>
@@ -302,34 +452,119 @@ function HomeInner({ data }: { data: UsageData }) {
             </div>
             <div className="w-px bg-white/10 self-stretch hidden sm:block" />
             <div>
-              <p className="text-[10px] text-white/40 mb-0.5 font-medium uppercase tracking-wider">Smart Spend Mode</p>
+              <p className="text-[10px] text-white/40 mb-0.5 font-medium uppercase tracking-wider">Smart Spend</p>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
                 <p className="text-sm font-semibold text-emerald-400">Active</p>
               </div>
             </div>
-            <div className="ml-auto">
-              <motion.button
-                onClick={handleOptimize}
-                disabled={isOptimizing}
-                whileTap={{ scale: 0.94 }}
-                whileHover={{ scale: 1.03 }}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/12 hover:bg-white/20 border border-white/25 text-white text-sm font-semibold transition-colors disabled:opacity-60 backdrop-blur-sm"
-              >
-                {isOptimizing ? (
-                  <><RefreshCw className="w-3.5 h-3.5 animate-spin" />Optimizing...</>
-                ) : (
-                  <><Zap className="w-3.5 h-3.5" />Optimize Wallet</>
-                )}
-              </motion.button>
-            </div>
           </div>
         </div>
       </motion.div>
 
+      {/* ── Quick Actions ── */}
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+        className="mb-5">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quick Actions</p>
+        <div className="grid grid-cols-3 gap-3">
+          {/* Run AI Task */}
+          <ActionBtn
+            icon={<Play className="w-4 h-4" />}
+            label="Run AI Task"
+            desc="Simulate API call"
+            loading={isRunningTask}
+            accent="text-orange-400"
+            border="border-orange-400/25"
+            bg="bg-orange-400/6 hover:bg-orange-400/12"
+            iconBg="bg-orange-400/15"
+            onClick={handleRunTask}
+          />
+
+          {/* Add Funds */}
+          <div className="relative">
+            <ActionBtn
+              icon={<Plus className="w-4 h-4" />}
+              label="Add Funds"
+              desc={`+$${fundsAmt} top-up`}
+              loading={isAddingFunds}
+              accent="text-emerald-400"
+              border="border-emerald-400/25"
+              bg="bg-emerald-400/6 hover:bg-emerald-400/12"
+              iconBg="bg-emerald-400/15"
+              badge={`$${fundsAmt}`}
+              onClick={() => setShowFundsMenu(v => !v)}
+            />
+            {/* Amount picker */}
+            <AnimatePresence>
+              {showFundsMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                  className="absolute top-full left-0 right-0 mt-2 z-30 rounded-xl border border-border/50 bg-card shadow-xl backdrop-blur-sm p-2 flex flex-col gap-1"
+                >
+                  {FUNDS_OPTIONS.map(amt => (
+                    <button key={amt}
+                      onClick={() => { setFundsAmt(amt); handleAddFunds(amt); }}
+                      className={`text-sm font-semibold px-3 py-2 rounded-lg transition-colors text-left ${
+                        fundsAmt === amt
+                          ? "bg-emerald-400/20 text-emerald-400"
+                          : "hover:bg-secondary text-foreground"
+                      }`}>
+                      +${amt}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Optimize Spend */}
+          <ActionBtn
+            icon={<Zap className="w-4 h-4" />}
+            label="Optimize Spend"
+            desc="Find savings now"
+            loading={isOptimizing}
+            accent="text-violet-400"
+            border="border-violet-400/25"
+            bg="bg-violet-400/6 hover:bg-violet-400/12"
+            iconBg="bg-violet-400/15"
+            onClick={handleOptimize}
+          />
+        </div>
+      </motion.div>
+
+      {/* ── Savings Tip Banner ── */}
+      <AnimatePresence>
+        {savingsTip && (
+          <motion.div
+            key="savings-tip"
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, height: "auto", marginBottom: 20 }}
+            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-400/30 bg-amber-400/8">
+              <div className="w-8 h-8 rounded-xl bg-amber-400/15 flex items-center justify-center flex-shrink-0 text-amber-400 mt-0.5">
+                <Lightbulb className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-amber-400 uppercase tracking-wide mb-1">Savings Tip</p>
+                <p className="text-sm text-foreground leading-relaxed">{savingsTip}</p>
+              </div>
+              <button onClick={() => setSavingsTip(null)}
+                className="flex-shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── Spend Mode Selector ── */}
       <motion.div
-        initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+        initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.17 }}
         className="glass-panel rounded-2xl p-5 mb-6"
       >
         <div className="flex items-center gap-2 mb-4">
@@ -397,8 +632,7 @@ function HomeInner({ data }: { data: UsageData }) {
           value={`$${isSimulated ? (projSpend / data.totalRequests).toFixed(3) : data.avgCost.toFixed(3)}`}
           trend={{ value: isSimulated ? `-${(((data.avgCost - projSpend / data.totalRequests) / data.avgCost) * 100).toFixed(1)}%` : "-4.2%", isPositive: true }} />
         <StatCard delay={0.4} title="Top Tool" value={data.topTool}
-          icon={<BrainCircuit className="w-4 h-4" />}
-          className="whitespace-nowrap overflow-hidden text-ellipsis" />
+          icon={<BrainCircuit className="w-4 h-4" />} className="whitespace-nowrap overflow-hidden text-ellipsis" />
       </div>
 
       {/* ── Monthly Budget ── */}
@@ -552,36 +786,64 @@ function HomeInner({ data }: { data: UsageData }) {
         <div className="space-y-2">
           <AnimatePresence initial={false}>
             {transactions.map(tx => {
+              const isNew   = newTxIds.has(tx.id);
               const isSave  = tx.type === "optimization";
               const isMode  = tx.type === "mode_switch";
+              const isDepos = tx.type === "deposit";
               const isSpend = tx.type === "usage";
               return (
                 <motion.div key={tx.id}
-                  initial={{ opacity: 0, y: -12, scale: 0.96 }}
+                  initial={{ opacity: 0, y: -14, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, height: 0, marginBottom: 0 }}
                   transition={{ type: "spring", stiffness: 380, damping: 28 }}
-                  className="flex items-center justify-between px-4 py-3 rounded-xl bg-card/30 border border-border/30 hover:bg-card/60 transition-colors">
+                  className={`relative flex items-center justify-between px-4 py-3 rounded-xl border transition-colors duration-500 ${
+                    isNew
+                      ? isSave || isDepos
+                        ? "bg-emerald-400/8 border-emerald-400/40 shadow-[0_0_12px_rgba(52,211,153,0.12)]"
+                        : "bg-primary/8 border-primary/40 shadow-[0_0_12px_rgba(139,92,246,0.12)]"
+                      : "bg-card/30 border-border/30 hover:bg-card/60"
+                  }`}>
+                  {/* new indicator */}
+                  {isNew && (
+                    <motion.div initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ delay: 2.5, duration: 0.5 }}
+                      className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-current opacity-80"
+                      style={{ color: isSave || isDepos ? "#34d399" : "#8b5cf6" }} />
+                  )}
+
                   <div className="flex items-center gap-3">
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      isSave ? "bg-success/15 text-success" : isMode ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"
+                      isSave  ? "bg-success/15 text-success"
+                    : isDepos ? "bg-emerald-400/15 text-emerald-300"
+                    : isMode  ? "bg-primary/15 text-primary"
+                    : "bg-secondary text-muted-foreground"
                     }`}>
                       {isSave  && <ArrowDownRight className="w-4 h-4" />}
+                      {isDepos && <Plus className="w-4 h-4" />}
                       {isMode  && <Sparkles className="w-4 h-4" />}
                       {isSpend && <ArrowUpRight className="w-4 h-4" />}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground leading-snug">{tx.label}</p>
-                      <p className="text-xs text-muted-foreground">{formatRelTime(tx.timestamp)}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground">{formatRelTime(tx.timestamp)}</p>
+                        {isNew && (
+                          <motion.span initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ delay: 2.8, duration: 0.4 }}
+                            className="text-[10px] font-bold text-current px-1.5 py-0.5 rounded-full bg-current/10"
+                            style={{ color: isSave || isDepos ? "#34d399" : "#8b5cf6" }}>
+                            NEW
+                          </motion.span>
+                        )}
+                      </div>
                     </div>
                   </div>
+
                   {tx.amount !== 0 ? (
-                    <div className={`text-sm font-bold font-mono flex items-center gap-0.5 ${isSave ? "text-success" : "text-muted-foreground"}`}>
-                      {isSave  && <span className="text-success">+</span>}
-                      {isSpend && <span className="text-red-400/80">-</span>}
-                      <span className={isSpend ? "text-red-400" : undefined}>
-                        ${Math.abs(tx.amount).toFixed(2)}
-                      </span>
+                    <div className={`text-sm font-bold font-mono flex items-center gap-0.5 ${
+                      isSave || isDepos ? "text-success" : "text-red-400"
+                    }`}>
+                      <span>{isSave || isDepos ? "+" : "-"}</span>
+                      <span>${Math.abs(tx.amount).toFixed(2)}</span>
                     </div>
                   ) : (
                     <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-full">mode</span>
@@ -592,7 +854,7 @@ function HomeInner({ data }: { data: UsageData }) {
           </AnimatePresence>
           {transactions.length === 0 && (
             <div className="text-center py-8 text-muted-foreground text-sm">
-              No transactions yet — click Optimize Wallet to start.
+              No transactions yet — click an action above to get started.
             </div>
           )}
         </div>
