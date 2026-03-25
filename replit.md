@@ -48,6 +48,20 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
+## Authentication
+
+Replit OIDC auth (no DB required — fully in-memory):
+
+- `artifacts/api-server/src/lib/auth.ts` — In-memory session store (Map) + user store (Map) + OIDC helpers
+- `artifacts/api-server/src/middlewares/authMiddleware.ts` — Reads session cookie, validates session, attaches `req.user`
+- `artifacts/api-server/src/routes/auth.ts` — `GET /api/login`, `GET /api/callback`, `GET /api/logout`, `GET /api/auth/user`
+- `lib/replit-auth-web/` — `useAuth()` React hook (fetches `/api/auth/user` on mount, exposes `login` / `logout`)
+
+### Wallet API (per-user, in-memory)
+
+- `artifacts/api-server/src/routes/wallet.ts` — `GET /api/wallet`, `POST /api/wallet/optimize`, `POST /api/wallet/mode`
+- Wallet state is keyed by `userId` in a `Map<string, WalletState>` — persists until server restart
+
 ## Packages
 
 ### `artifacts/api-server` (`@workspace/api-server`)
