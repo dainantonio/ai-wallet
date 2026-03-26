@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Shell } from "@/components/layout/Shell";
 import { StatCard } from "@/components/ui/StatCard";
 import { useUsageData } from "@/hooks/use-app-data";
@@ -725,6 +725,29 @@ function HomeInner({ data }: { data: UsageData }) {
 
   const displayName = user?.firstName ? `${user.firstName}'s Wallet` : "My AI Wallet";
 
+  // ── Spending Insights (derived from live transactions) ───────────────────
+  const insights = useMemo(() => {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayTs = todayStart.getTime();
+    const usageTxs = transactions.filter(tx => tx.type === "usage");
+
+    const spentToday = transactions
+      .filter(tx => tx.type === "usage" && tx.timestamp >= todayTs)
+      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+    const avgCost = usageTxs.length > 0
+      ? usageTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0) / usageTxs.length
+      : 0;
+
+    const providerCounts: Record<string, number> = {};
+    usageTxs.forEach(tx => {
+      if (tx.provider) providerCounts[tx.provider] = (providerCounts[tx.provider] ?? 0) + 1;
+    });
+    const topProvider = Object.entries(providerCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+
+    return { spentToday, avgCost, topProvider };
+  }, [transactions]);
+
   if (walletLoading) {
     return (
       <Shell>
@@ -1018,6 +1041,70 @@ function HomeInner({ data }: { data: UsageData }) {
         <StatCard delay={0.4} title="Top Tool" value={data.topTool}
           icon={<BrainCircuit className="w-4 h-4" />} className="whitespace-nowrap overflow-hidden text-ellipsis" />
       </div>
+
+      {/* ── Spending Insights ── */}
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
+        className="glass-panel rounded-2xl p-5 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <BrainCircuit className="w-4 h-4 text-muted-foreground" />
+          <p className="text-sm font-semibold text-foreground">Spending Insights</p>
+          <span className="text-xs text-muted-foreground ml-auto">live</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Today's spend */}
+          <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-red-400/6 border border-red-400/20">
+            <div className="flex items-center gap-1.5">
+              <Receipt className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Today's Spend</p>
+            </div>
+            <p className="text-xl font-bold font-mono text-red-400">
+              ${insights.spentToday > 0 ? insights.spentToday.toFixed(2) : "0.00"}
+            </p>
+            <p className="text-[10px] text-muted-foreground">from today's tasks</p>
+          </div>
+
+          {/* Total saved */}
+          <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-emerald-400/6 border border-emerald-400/20">
+            <div className="flex items-center gap-1.5">
+              <TrendingDown className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total Saved</p>
+            </div>
+            <p className="text-xl font-bold font-mono text-emerald-400">+${totalSaved.toFixed(2)}</p>
+            <p className="text-[10px] text-muted-foreground">via optimizations</p>
+          </div>
+
+          {/* Most used provider */}
+          <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-secondary/40 border border-border/40">
+            <div className="flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Top Provider</p>
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {insights.topProvider !== "—" ? (
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${PROVIDER_COLOR[insights.topProvider] ?? "text-foreground bg-secondary"}`}>
+                  {insights.topProvider}
+                </span>
+              ) : (
+                <p className="text-xl font-bold text-foreground">—</p>
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground">most tasks routed</p>
+          </div>
+
+          {/* Avg cost per task */}
+          <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-blue-400/6 border border-blue-400/20">
+            <div className="flex items-center gap-1.5">
+              <ArrowUpRight className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg Cost / Task</p>
+            </div>
+            <p className="text-xl font-bold font-mono text-blue-400">
+              {insights.avgCost > 0 ? `$${insights.avgCost.toFixed(3)}` : "—"}
+            </p>
+            <p className="text-[10px] text-muted-foreground">across recent tasks</p>
+          </div>
+        </div>
+      </motion.div>
 
       {/* ── Monthly Budget ── */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
