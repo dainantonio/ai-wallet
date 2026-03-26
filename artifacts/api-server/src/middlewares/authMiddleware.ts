@@ -55,6 +55,16 @@ export async function authMiddleware(
     return this.user != null;
   } as Request["isAuthenticated"];
 
+  // Dev bypass: no Replit auth needed when running locally
+  if (process.env.NODE_ENV === "development") {
+    const sid = getSessionId(req);
+    if (!sid) {
+      req.user = { id: "local-dev-user", email: "dev@local", firstName: "Dev", lastName: "User", profileImageUrl: null } as Express.User;
+      next();
+      return;
+    }
+  }
+
   const sid = getSessionId(req);
   if (!sid) { next(); return; }
 
