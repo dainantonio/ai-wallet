@@ -393,35 +393,6 @@ function HomeInner({ data }: { data: UsageData }) {
       .finally(() => setWalletLoading(false));
   }, []);
 
-  // ── Wallet ref — lets the tick closure always see the latest state ────────
-  const walletRef = useRef<WalletState | null>(null);
-  useEffect(() => { walletRef.current = wallet; }, [wallet]);
-
-  // ── Auto-tick: live activity simulation, 10–15 s random interval ─────────
-  useEffect(() => {
-    let timerId: ReturnType<typeof setTimeout>;
-
-    const schedule = () => {
-      const delay = 10000 + Math.random() * 5000; // 10–15 s
-      timerId = setTimeout(tick, delay);
-    };
-
-    const tick = () => {
-      const w = walletRef.current;
-      if (!document.hidden && w) {
-        const tickCostRange: Record<SpendMode, [number, number]> = { saver: [0.04, 0.20], balanced: [0.08, 0.65], performance: [0.20, 1.20] };
-        const [lo, hi] = tickCostRange[w.spendMode];
-        const cost = +rand(lo, hi);
-        const tx: WalletTx = { id: makeId(), label: pick(COST_LABELS), amount: -cost, timestamp: Date.now(), type: "usage", provider: pick(USAGE_PROVIDERS) };
-        applyWalletUpdate({ ...w, balance: +(w.balance + cost).toFixed(2), transactions: [tx, ...w.transactions].slice(0, 10) });
-      }
-      schedule(); // reschedule after each tick regardless
-    };
-
-    schedule();
-    return () => clearTimeout(timerId);
-  }, [applyWalletUpdate]); // runs once; wallet accessed via ref
-
   // ── Apply wallet update + side effects ──────────────────────────────────
   const applyWalletUpdate = useCallback((updated: WalletState, newIds?: string[]) => {
     setWallet(prev => {
@@ -451,6 +422,35 @@ function HomeInner({ data }: { data: UsageData }) {
       });
     }
   }, []);
+
+  // ── Wallet ref — lets the tick closure always see the latest state ────────
+  const walletRef = useRef<WalletState | null>(null);
+  useEffect(() => { walletRef.current = wallet; }, [wallet]);
+
+  // ── Auto-tick: live activity simulation, 10–15 s random interval ─────────
+  useEffect(() => {
+    let timerId: ReturnType<typeof setTimeout>;
+
+    const schedule = () => {
+      const delay = 10000 + Math.random() * 5000; // 10–15 s
+      timerId = setTimeout(tick, delay);
+    };
+
+    const tick = () => {
+      const w = walletRef.current;
+      if (!document.hidden && w) {
+        const tickCostRange: Record<SpendMode, [number, number]> = { saver: [0.04, 0.20], balanced: [0.08, 0.65], performance: [0.20, 1.20] };
+        const [lo, hi] = tickCostRange[w.spendMode];
+        const cost = +rand(lo, hi);
+        const tx: WalletTx = { id: makeId(), label: pick(COST_LABELS), amount: -cost, timestamp: Date.now(), type: "usage", provider: pick(USAGE_PROVIDERS) };
+        applyWalletUpdate({ ...w, balance: +(w.balance + cost).toFixed(2), transactions: [tx, ...w.transactions].slice(0, 10) });
+      }
+      schedule(); // reschedule after each tick regardless
+    };
+
+    schedule();
+    return () => clearTimeout(timerId);
+  }, [applyWalletUpdate]); // runs once; wallet accessed via ref
 
   // ── Show savings tip ─────────────────────────────────────────────────────
   const showTip = useCallback((tip: string) => {
