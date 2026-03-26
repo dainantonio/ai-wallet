@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Wallet, Zap, TrendingDown, Shield, ArrowRight } from "lucide-react";
+import { Wallet, Zap, TrendingDown, Shield, ArrowRight, FlaskConical } from "lucide-react";
 
 const FEATURES = [
   { icon: <TrendingDown className="w-4 h-4" />, text: "Track AI spend in real time" },
@@ -7,7 +7,7 @@ const FEATURES = [
   { icon: <Shield className="w-4 h-4" />,        text: "Budget alerts & controls" },
 ];
 
-export default function LoginPage({ onLogin }: { onLogin: () => void }) {
+export default function LoginPage({ onLogin, onDemo }: { onLogin: () => void; onDemo: () => void }) {
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-background relative overflow-hidden">
       {/* Background effects */}
@@ -81,6 +81,28 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
 
           <p className="text-xs text-muted-foreground text-center mt-4">
             Secure authentication · No password required
+          </p>
+
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border/40" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="px-3 text-xs text-muted-foreground bg-card/60">or</span>
+            </div>
+          </div>
+
+          <motion.button
+            onClick={onDemo}
+            whileTap={{ scale: 0.97 }}
+            whileHover={{ scale: 1.01 }}
+            className="w-full flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl border border-border/50 bg-secondary/40 hover:bg-secondary/70 text-foreground font-medium text-sm transition-colors"
+          >
+            <FlaskConical className="w-4 h-4 text-amber-400" />
+            <span>Continue as Demo</span>
+          </motion.button>
+          <p className="text-xs text-muted-foreground text-center mt-2">
+            Explore the dashboard · No account needed
           </p>
         </motion.div>
 

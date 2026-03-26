@@ -11,7 +11,7 @@ import {
   MessageSquare, Image, Bot, Target, CheckCircle2,
   TriangleAlert, XCircle, Gauge, Leaf, Flame,
   CreditCard, Receipt, ArrowDownRight, ArrowUpRight,
-  Play, Plus, RefreshCw, X, ShieldCheck,
+  Play, Plus, RefreshCw, X, ShieldCheck, FlaskConical,
 } from "lucide-react";
 import { motion, AnimatePresence, animate as motionAnimate } from "framer-motion";
 import type { UsageData } from "@workspace/api-client-react/src/generated/api.schemas";
@@ -126,6 +126,21 @@ function defaultClientWallet(): WalletState {
       { id: "init-3", label: "Smart routing: GPT-4o → mini", amount:   9.60, timestamp: Date.now() - 10 * 60000, type: "optimization", provider: "AI Wallet" },
       { id: "init-4", label: "Document summarization",       amount: -0.018, timestamp: Date.now() - 20 * 60000, type: "usage",        provider: "Anthropic" },
       { id: "init-5", label: "Token budget optimization",    amount:   6.20, timestamp: Date.now() - 40 * 60000, type: "optimization", provider: "AI Wallet" },
+    ],
+  };
+}
+
+function demoWallet(): WalletState {
+  return {
+    balance: 25.00,
+    totalSaved: 4.20,
+    spendMode: "balanced",
+    transactions: [
+      { id: "demo-1", label: "Chat completion request",      amount: -0.032, timestamp: Date.now() - 1  * 60000, type: "usage",        provider: "OpenAI"    },
+      { id: "demo-2", label: "Semantic cache hit",           amount:  1.80,  timestamp: Date.now() - 3  * 60000, type: "optimization", provider: "AI Wallet" },
+      { id: "demo-3", label: "Ran: Email draft generation",  amount: -0.045, timestamp: Date.now() - 8  * 60000, type: "usage",        provider: "Anthropic" },
+      { id: "demo-4", label: "Smart routing: GPT-4o → mini", amount:  2.40, timestamp: Date.now() - 15 * 60000, type: "optimization", provider: "AI Wallet" },
+      { id: "demo-5", label: "Embedding computation",        amount: -0.008, timestamp: Date.now() - 25 * 60000, type: "usage",        provider: "OpenAI"    },
     ],
   };
 }
@@ -345,7 +360,7 @@ export default function Home() {
 
 // ─── Inner (data + wallet state) ─────────────────────────────────────────────
 function HomeInner({ data }: { data: UsageData }) {
-  const { user } = useAuthContext();
+  const { user, isDemo, logout } = useAuthContext();
 
   // ── Wallet state ────────────────────────────────────────────────────────
   const [wallet, setWallet]           = useState<WalletState | null>(null);
@@ -382,6 +397,13 @@ function HomeInner({ data }: { data: UsageData }) {
 
   // ── Load wallet ─────────────────────────────────────────────────────────
   useEffect(() => {
+    if (isDemo) {
+      const w = demoWallet();
+      setWallet(w);
+      prevBalanceRef.current = w.balance;
+      setWalletLoading(false);
+      return;
+    }
     fetch("/api/wallet", { credentials: "include" })
       .then(r => r.ok ? r.json() as Promise<WalletState> : Promise.reject(r.status))
       .then((w) => { setWallet(w); prevBalanceRef.current = w.balance; })
@@ -391,7 +413,7 @@ function HomeInner({ data }: { data: UsageData }) {
         prevBalanceRef.current = fallback.balance;
       })
       .finally(() => setWalletLoading(false));
-  }, []);
+  }, [isDemo]);
 
   // ── Apply wallet update + side effects ──────────────────────────────────
   const applyWalletUpdate = useCallback((updated: WalletState, newIds?: string[]) => {
@@ -634,6 +656,27 @@ function HomeInner({ data }: { data: UsageData }) {
 
   return (
     <Shell>
+      {/* ── Demo Mode Banner ── */}
+      {isDemo && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-amber-400/30 bg-amber-400/8 mb-5"
+        >
+          <div className="flex items-center gap-2.5">
+            <FlaskConical className="w-4 h-4 text-amber-400 flex-shrink-0" />
+            <p className="text-sm font-medium text-amber-300">
+              You are in <span className="font-bold">Demo Mode</span> — data is not saved
+            </p>
+          </div>
+          <button
+            onClick={logout}
+            className="text-xs font-semibold text-amber-400 hover:text-amber-300 border border-amber-400/40 hover:border-amber-400/70 px-2.5 py-1 rounded-lg transition-colors flex-shrink-0"
+          >
+            Exit Demo
+          </button>
+        </motion.div>
+      )}
+
       <header className="mb-6">
         <motion.h1 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
           className="text-3xl md:text-4xl font-display font-bold text-foreground">

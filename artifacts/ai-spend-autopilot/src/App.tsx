@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useState } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -15,9 +15,10 @@ import LoginPage from "@/pages/login";
 interface AuthCtx {
   user: AuthUser | null;
   logout: () => void;
+  isDemo: boolean;
 }
 
-export const AuthContext = createContext<AuthCtx>({ user: null, logout: () => {} });
+export const AuthContext = createContext<AuthCtx>({ user: null, logout: () => {}, isDemo: false });
 export const useAuthContext = () => useContext(AuthContext);
 
 const queryClient = new QueryClient({
@@ -36,8 +37,17 @@ function Router() {
   );
 }
 
+const DEMO_USER: AuthUser = {
+  id: "demo",
+  firstName: "Demo",
+  lastName: "User",
+  email: "demo@aiwallet.app",
+  profileImageUrl: "",
+};
+
 function App() {
   const { user, isLoading, isAuthenticated, login, logout } = useAuth();
+  const [isDemo, setIsDemo] = useState(false);
 
   if (isLoading) {
     return (
@@ -47,12 +57,16 @@ function App() {
     );
   }
 
-  if (!isAuthenticated) {
-    return <LoginPage onLogin={login} />;
+  if (!isAuthenticated && !isDemo) {
+    return <LoginPage onLogin={login} onDemo={() => setIsDemo(true)} />;
   }
 
   return (
-    <AuthContext.Provider value={{ user, logout }}>
+    <AuthContext.Provider value={{
+      user:   isDemo ? DEMO_USER : user,
+      logout: isDemo ? () => setIsDemo(false) : logout,
+      isDemo,
+    }}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
