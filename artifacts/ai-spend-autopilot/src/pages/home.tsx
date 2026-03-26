@@ -268,7 +268,9 @@ function HomeInner({ data }: { data: UsageData }) {
   useEffect(() => {
     const tick = () => {
       if (document.hidden || !wallet) return;
-      const cost = +rand(0.08, 0.65);
+      const tickCostRange: Record<SpendMode, [number, number]> = { saver: [0.04, 0.20], balanced: [0.08, 0.65], performance: [0.20, 1.20] };
+      const [lo, hi] = tickCostRange[wallet.spendMode];
+      const cost = +rand(lo, hi);
       const tx: WalletTx = { id: makeId(), label: pick(COST_LABELS), amount: -cost, timestamp: Date.now(), type: "usage" };
       applyWalletUpdate({ ...wallet, balance: +(wallet.balance + cost).toFixed(2), transactions: [tx, ...wallet.transactions].slice(0, 10) });
     };
@@ -329,7 +331,9 @@ function HomeInner({ data }: { data: UsageData }) {
     } catch { /* fall through to simulation */ }
     if (!handled) {
       await new Promise(r => setTimeout(r, 420));
-      const cost = +rand(0.02, 0.10);
+      const taskCostRange: Record<SpendMode, [number, number]> = { saver: [0.01, 0.04], balanced: [0.02, 0.10], performance: [0.05, 0.20] };
+      const [lo, hi] = taskCostRange[wallet.spendMode];
+      const cost = +rand(lo, hi);
       const tx: WalletTx = { id: makeId(), label: pick(CLIENT_TASK_LABELS), amount: -cost, timestamp: Date.now(), type: "usage" };
       applyWalletUpdate(
         { ...wallet, balance: +Math.max(0, wallet.balance - cost).toFixed(2), transactions: [tx, ...wallet.transactions].slice(0, 10) },

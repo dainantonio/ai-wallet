@@ -96,12 +96,20 @@ router.get("/wallet", (req: Request, res: Response) => {
   res.json(getWallet(req.user.id));
 });
 
-// ─── POST /api/wallet/task — deduct $0.02–$0.10 per AI task ─────────────────
+// ─── Cost ranges keyed by spend mode ─────────────────────────────────────────
+const TASK_COST: Record<SpendMode, [number, number]> = {
+  saver:       [0.01, 0.04],
+  balanced:    [0.02, 0.10],
+  performance: [0.05, 0.20],
+};
+
+// ─── POST /api/wallet/task — deduct cost (varies by spend mode) ───────────────
 router.post("/wallet/task", (req: Request, res: Response) => {
   if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
 
   const wallet = getWallet(req.user.id);
-  const cost = rand(0.02, 0.10, 3);
+  const [lo, hi] = TASK_COST[wallet.spendMode];
+  const cost = rand(lo, hi, 3);
   const tx: WalletTx = {
     id: makeId(),
     label: pick(TASK_LABELS),
