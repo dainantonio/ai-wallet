@@ -163,6 +163,13 @@ function formatRelTime(ts: number) {
   if (d < 3600000)  return `${Math.floor(d / 60000)}m ago`;
   return `${Math.floor(d / 3600000)}h ago`;
 }
+function formatLastUpdated(ts: number) {
+  const d = Date.now() - ts;
+  if (d < 8000)    return "just now";
+  if (d < 60000)   return `${Math.floor(d / 1000)}s ago`;
+  if (d < 3600000) return `${Math.floor(d / 60000)}m ago`;
+  return `${Math.floor(d / 3600000)}h ago`;
+}
 
 // ─── Animated number ──────────────────────────────────────────────────────────
 function AnimatedNumber({ value, prefix = "", suffix = "", decimals = 0 }: {
@@ -228,15 +235,14 @@ function ActionBtn({ icon, label, desc, loading, accent, border, bg, iconBg, onC
       whileTap={{ scale: 0.93 }}
       whileHover={{ scale: 1.03, y: -2 }}
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
-      className={`relative flex flex-col items-center gap-2.5 px-4 py-4 rounded-2xl border ${border} ${bg} transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-center overflow-hidden group w-full`}
+      className={`relative flex flex-col items-center gap-2 sm:gap-2.5 px-2 sm:px-4 py-4 rounded-2xl border ${border} ${bg} transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-center overflow-hidden group w-full min-h-[88px]`}
     >
       {/* Shine on hover */}
       <div className="absolute inset-0 bg-gradient-to-b from-white/4 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-250 pointer-events-none" />
       {/* Bottom rim glow on hover */}
       <div className="absolute bottom-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-current to-transparent opacity-0 group-hover:opacity-30 transition-opacity duration-250 pointer-events-none" style={{ color: "currentcolor" }} />
 
-      <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 transition-all duration-200 group-hover:scale-115 group-hover:shadow-lg ${accent}`}
-        style={{ boxShadow: undefined }}>
+      <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 transition-all duration-200 group-hover:scale-110 ${accent}`}>
         {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : icon}
       </div>
       <div>
@@ -246,7 +252,7 @@ function ActionBtn({ icon, label, desc, loading, accent, border, bg, iconBg, onC
             <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${iconBg} ${accent}`}>{badge}</span>
           )}
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5">{loading ? "Working…" : desc}</p>
+        <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 leading-tight">{loading ? "Working…" : desc}</p>
       </div>
     </motion.button>
   );
@@ -450,6 +456,12 @@ function HomeInner({ data }: { data: UsageData }) {
   const [balanceFlash, setBalanceFlash]     = useState<"up" | "down" | null>(null);
   const prevBalanceRef = useRef<number | null>(null);
 
+  // ── Last updated + savings glow ─────────────────────────────────────────
+  const [lastUpdated, setLastUpdated]       = useState<number>(Date.now());
+  const [savingsGlow, setSavingsGlow]       = useState(false);
+  const prevSavedRef                        = useRef<number | null>(null);
+  const [, setRelTimeTick]                  = useState(0); // forces re-render for relative time
+
   // ── Funds amount selector ───────────────────────────────────────────────
   const [fundsAmt, setFundsAmt]             = useState(25);
   const [showFundsMenu, setShowFundsMenu]   = useState(false);
@@ -465,16 +477,18 @@ function HomeInner({ data }: { data: UsageData }) {
       const w = demoWallet();
       setWallet(w);
       prevBalanceRef.current = w.balance;
+      prevSavedRef.current   = w.totalSaved;
       setWalletLoading(false);
       return;
     }
     fetch("/api/wallet", { credentials: "include" })
       .then(r => r.ok ? r.json() as Promise<WalletState> : Promise.reject(r.status))
-      .then((w) => { setWallet(w); prevBalanceRef.current = w.balance; })
+      .then((w) => { setWallet(w); prevBalanceRef.current = w.balance; prevSavedRef.current = w.totalSaved; })
       .catch(() => {
         const fallback = defaultClientWallet();
         setWallet(fallback);
         prevBalanceRef.current = fallback.balance;
+        prevSavedRef.current   = fallback.totalSaved;
       })
       .finally(() => setWalletLoading(false));
   }, [isDemo]);
@@ -492,6 +506,16 @@ function HomeInner({ data }: { data: UsageData }) {
       return updated;
     });
 
+    // "Last updated" timestamp
+    setLastUpdated(Date.now());
+
+    // Savings glow when totalSaved increases
+    if (prevSavedRef.current !== null && updated.totalSaved > prevSavedRef.current) {
+      setSavingsGlow(true);
+      setTimeout(() => setSavingsGlow(false), 1800);
+    }
+    prevSavedRef.current = updated.totalSaved;
+
     if (newIds?.length) {
       setNewTxIds(prev => {
         const next = new Set(prev);
@@ -508,6 +532,20 @@ function HomeInner({ data }: { data: UsageData }) {
       });
     }
   }, []);
+
+  // ── Tick relative time display every 15 s ────────────────────────────────
+  useEffect(() => {
+    const t = setInterval(() => setRelTimeTick(v => v + 1), 15000);
+    return () => clearInterval(t);
+  }, []);
+
+  // ── Close funds menu on outside click ────────────────────────────────────
+  useEffect(() => {
+    if (!showFundsMenu) return;
+    const close = () => setShowFundsMenu(false);
+    const id = setTimeout(() => window.addEventListener("click", close, { once: true }), 0);
+    return () => { clearTimeout(id); window.removeEventListener("click", close); };
+  }, [showFundsMenu]);
 
   // ── Wallet ref — lets the tick closure always see the latest state ────────
   const walletRef = useRef<WalletState | null>(null);
@@ -820,7 +858,7 @@ function HomeInner({ data }: { data: UsageData }) {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center shadow-inner">
-                <CreditCard className="w-4.5 h-4.5 text-white/80" />
+                <CreditCard className="w-[18px] h-[18px] text-white/80" />
               </div>
               <div>
                 <span className="text-xs font-bold tracking-widest text-white/45 uppercase block">AI Spend Wallet</span>
@@ -838,17 +876,23 @@ function HomeInner({ data }: { data: UsageData }) {
           {/* Balance */}
           <div className="mb-8">
             <p className="text-xs text-white/40 mb-1.5 font-semibold tracking-widest uppercase">Balance</p>
-            <div className="relative inline-block">
+            <motion.div
+              key={balance}
+              initial={{ scale: 1.03 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className="relative inline-block"
+            >
               {/* Flash ring */}
               <AnimatePresence>
                 {balanceFlash && (
                   <motion.div
                     key={balanceFlash}
-                    initial={{ opacity: 0.8, scale: 0.95 }}
-                    animate={{ opacity: 0, scale: 1.15 }}
+                    initial={{ opacity: 0.9, scale: 0.93 }}
+                    animate={{ opacity: 0, scale: 1.2 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.7 }}
-                    className={`absolute inset-0 rounded-xl pointer-events-none ${balanceFlash === "up" ? "bg-emerald-400/20" : "bg-red-400/20"}`}
+                    transition={{ duration: 0.65 }}
+                    className={`absolute inset-0 rounded-xl pointer-events-none ${balanceFlash === "up" ? "bg-emerald-400/25" : "bg-red-400/25"}`}
                   />
                 )}
               </AnimatePresence>
@@ -857,7 +901,7 @@ function HomeInner({ data }: { data: UsageData }) {
               }`}>
                 $<AnimatedNumber value={balance} decimals={2} />
               </div>
-            </div>
+            </motion.div>
             <p className="text-xs text-white/35 mt-1.5 font-medium tracking-wide">this month's spend</p>
           </div>
 
@@ -869,9 +913,27 @@ function HomeInner({ data }: { data: UsageData }) {
             <div className="w-px bg-white/10 self-stretch hidden sm:block" />
             <div>
               <p className="text-[10px] text-white/40 mb-0.5 font-medium uppercase tracking-wider">Total Saved</p>
-              <p className="text-xl font-bold text-emerald-400">
-                +$<AnimatedNumber value={totalSaved} decimals={1} />
-              </p>
+              <motion.p
+                animate={savingsGlow
+                  ? { textShadow: "0 0 14px rgba(52,211,153,0.9), 0 0 28px rgba(52,211,153,0.4)" }
+                  : { textShadow: "none" }
+                }
+                transition={{ duration: 0.4 }}
+                className="text-xl font-bold text-emerald-400"
+              >
+                +$<AnimatedNumber value={totalSaved} decimals={2} />
+              </motion.p>
+              <AnimatePresence>
+                {savingsGlow && (
+                  <motion.p
+                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.25 }}
+                    className="text-[10px] text-emerald-400 font-semibold mt-0.5"
+                  >
+                    ↑ savings updated
+                  </motion.p>
+                )}
+              </AnimatePresence>
             </div>
             <div className="w-px bg-white/10 self-stretch hidden sm:block" />
             <div>
@@ -889,7 +951,7 @@ function HomeInner({ data }: { data: UsageData }) {
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
         className="mb-5">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quick Actions</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {/* Run AI Task */}
           <ActionBtn
             icon={<Play className="w-4 h-4" />}
@@ -1256,7 +1318,7 @@ function HomeInner({ data }: { data: UsageData }) {
       {/* ── Transactions ── */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.48 }}
         className="glass-panel rounded-2xl p-6">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Receipt className="w-5 h-5 text-muted-foreground" />
             <h2 className="text-xl font-display font-bold text-foreground">Transactions</h2>
@@ -1264,9 +1326,21 @@ function HomeInner({ data }: { data: UsageData }) {
               {transactions.length}/10
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-secondary px-3 py-1.5 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            Live
+          <div className="flex items-center gap-2.5">
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={lastUpdated}
+                initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }} transition={{ duration: 0.3 }}
+                className="text-xs text-muted-foreground/70"
+              >
+                Updated {formatLastUpdated(lastUpdated)}
+              </motion.span>
+            </AnimatePresence>
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-secondary px-3 py-1.5 rounded-full">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              Live
+            </div>
           </div>
         </div>
 
@@ -1280,10 +1354,10 @@ function HomeInner({ data }: { data: UsageData }) {
               const isSpend = tx.type === "usage";
               return (
                 <motion.div key={tx.id}
-                  initial={{ opacity: 0, y: -14, scale: 0.96 }}
+                  initial={{ opacity: 0, y: -20, scale: 0.94 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                  exit={{ opacity: 0, scale: 0.95, height: 0, marginBottom: 0 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 24 }}
                   className={`tx-row justify-between border transition-colors duration-500 ${
                     isNew
                       ? isSave || isDepos
