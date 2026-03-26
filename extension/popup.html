@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Wallet</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="shell">
+
+    <!-- ── Header ── -->
+    <div class="header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="8" fill="url(#pg)"/>
+            <rect x="5" y="11" width="22" height="15" rx="3" fill="rgba(255,255,255,0.14)"/>
+            <rect x="5" y="11" width="22" height="7"  rx="3" fill="rgba(255,255,255,0.22)"/>
+            <rect x="19" y="15" width="8"  height="7"  rx="3" fill="rgba(255,255,255,0.25)"/>
+            <circle cx="23" cy="18.5" r="2" fill="rgba(255,255,255,0.5)"/>
+            <path d="M14 10 L11 16 H14 L11.5 22 L19 14 H15.5 L18 10 Z" fill="white" fill-opacity="0.9"/>
+            <defs>
+              <linearGradient id="pg" x1="0" y1="0" x2="32" y2="32">
+                <stop offset="0%" stop-color="#4F46E5"/>
+                <stop offset="100%" stop-color="#1e1b4b"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">AI Wallet</div>
+          <div class="brand-sub">Spend Autopilot</div>
+        </div>
+      </div>
+
+      <label class="toggle" title="Enable / disable overlay">
+        <input type="checkbox" id="toggle-enabled" />
+        <span class="toggle-track">
+          <span class="toggle-thumb"></span>
+        </span>
+      </label>
+    </div>
+
+    <!-- ── Session Stats ── -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Session Spend</div>
+        <div class="stat-value red" id="session-spend">$0.0000</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Saved</div>
+        <div class="stat-value green" id="total-saved">+$0.0000</div>
+      </div>
+    </div>
+
+    <!-- ── Last Action ── -->
+    <div class="last-action-card">
+      <div class="la-header">
+        <span class="la-label">Last Action</span>
+        <span class="la-cost" id="last-cost">—</span>
+      </div>
+      <div class="la-name" id="last-label">No tasks yet this session</div>
+    </div>
+
+    <!-- ── Spend Mode ── -->
+    <div class="section-label">Spend Mode</div>
+    <div class="mode-row">
+      <button class="mode-btn" data-mode="saver">
+        <span class="mode-icon">🌿</span>
+        <span class="mode-name">Saver</span>
+      </button>
+      <button class="mode-btn active" data-mode="balanced">
+        <span class="mode-icon">⚖</span>
+        <span class="mode-name">Balanced</span>
+      </button>
+      <button class="mode-btn" data-mode="performance">
+        <span class="mode-icon">🔥</span>
+        <span class="mode-name">Performance</span>
+      </button>
+    </div>
+
+    <!-- ── Site Coverage ── -->
+    <div class="sites-row">
+      <div class="site-chip active" id="chip-chatgpt">
+        <span class="site-dot"></span>ChatGPT
+      </div>
+      <div class="site-chip active" id="chip-claude">
+        <span class="site-dot"></span>Claude
+      </div>
+      <div class="site-chip more">+ more soon</div>
+    </div>
+
+    <!-- ── Footer ── -->
+    <div class="footer">
+      <button class="reset-btn" id="reset-btn">Reset session</button>
+      <a class="dashboard-link" href="https://ai-wallet.replit.app" target="_blank" rel="noopener">
+        Open Dashboard →
+      </a>
+    </div>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
