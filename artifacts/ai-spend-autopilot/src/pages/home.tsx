@@ -225,14 +225,18 @@ function ActionBtn({ icon, label, desc, loading, accent, border, bg, iconBg, onC
     <motion.button
       onClick={onClick}
       disabled={loading || disabled}
-      whileTap={{ scale: 0.95 }}
-      whileHover={{ scale: 1.02, y: -1 }}
-      className={`relative flex flex-col items-center gap-2.5 px-4 py-4 rounded-2xl border ${border} ${bg} transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-center overflow-hidden group w-full`}
+      whileTap={{ scale: 0.93 }}
+      whileHover={{ scale: 1.03, y: -2 }}
+      transition={{ type: "spring", stiffness: 400, damping: 22 }}
+      className={`relative flex flex-col items-center gap-2.5 px-4 py-4 rounded-2xl border ${border} ${bg} transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-center overflow-hidden group w-full`}
     >
-      {/* Subtle shine on hover */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/0 via-white/3 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+      {/* Shine on hover */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/4 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-250 pointer-events-none" />
+      {/* Bottom rim glow on hover */}
+      <div className="absolute bottom-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-current to-transparent opacity-0 group-hover:opacity-30 transition-opacity duration-250 pointer-events-none" style={{ color: "currentcolor" }} />
 
-      <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${accent}`}>
+      <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0 transition-all duration-200 group-hover:scale-115 group-hover:shadow-lg ${accent}`}
+        style={{ boxShadow: undefined }}>
         {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : icon}
       </div>
       <div>
@@ -797,31 +801,43 @@ function HomeInner({ data }: { data: UsageData }) {
         initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.45 }}
         className="relative rounded-3xl overflow-hidden mb-5"
-        style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 30%, #1e1b4b 60%, #0f172a 100%)" }}
+        style={{ background: "linear-gradient(135deg, #13111f 0%, #1e1b4b 20%, #2d2369 45%, #1a1740 70%, #0a0818 100%)" }}
       >
-        <div className="absolute top-0 left-0 w-72 h-72 bg-indigo-500/20 rounded-full blur-[80px] -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
-        <div className="absolute bottom-0 right-0 w-64 h-64 bg-primary/25 rounded-full blur-[60px] translate-x-1/3 translate-y-1/3 pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/3 pointer-events-none" />
+        {/* Top highlight line */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
+
+        {/* Ambient glows */}
+        <div className="absolute top-0 left-0 w-72 h-72 bg-indigo-500/25 rounded-full blur-[90px] -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-64 h-64 bg-primary/30 rounded-full blur-[70px] translate-x-1/3 translate-y-1/3 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-br from-white/6 via-transparent to-white/2 pointer-events-none" />
+
+        {/* Shimmer sweep */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="card-shine-inner absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-white/6 to-transparent" />
+        </div>
 
         <div className="relative z-10 p-6 md:p-8">
           <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center">
-                <CreditCard className="w-4 h-4 text-white/80" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center shadow-inner">
+                <CreditCard className="w-4.5 h-4.5 text-white/80" />
               </div>
-              <span className="text-xs font-bold tracking-widest text-white/50 uppercase">AI Spend Wallet</span>
+              <div>
+                <span className="text-xs font-bold tracking-widest text-white/45 uppercase block">AI Spend Wallet</span>
+                <span className="text-[10px] font-mono text-white/25 tracking-widest">•••• •••• •••• 4721</span>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${activeMode.color}`}>
                 {activeMode.label} Mode
               </span>
-              <Wallet className="w-5 h-5 text-white/30" />
+              <Wallet className="w-5 h-5 text-white/25" />
             </div>
           </div>
 
           {/* Balance */}
           <div className="mb-8">
-            <p className="text-sm text-white/50 mb-1 font-medium tracking-wide">Balance</p>
+            <p className="text-xs text-white/40 mb-1.5 font-semibold tracking-widest uppercase">Balance</p>
             <div className="relative inline-block">
               {/* Flash ring */}
               <AnimatePresence>
@@ -836,13 +852,13 @@ function HomeInner({ data }: { data: UsageData }) {
                   />
                 )}
               </AnimatePresence>
-              <div className={`text-5xl md:text-6xl font-display font-black tracking-tight transition-colors duration-300 ${
+              <div className={`text-5xl md:text-6xl font-mono font-black tracking-tight transition-colors duration-300 ${
                 balanceFlash === "up" ? "text-emerald-300" : balanceFlash === "down" ? "text-red-300" : "text-white"
               }`}>
-                $<AnimatedNumber value={balance} decimals={1} />
+                $<AnimatedNumber value={balance} decimals={2} />
               </div>
             </div>
-            <p className="text-sm text-white/40 mt-1">this month's spend</p>
+            <p className="text-xs text-white/35 mt-1.5 font-medium tracking-wide">this month's spend</p>
           </div>
 
           <div className="flex flex-wrap gap-x-6 gap-y-3 pt-5 border-t border-white/10 items-end">
@@ -1053,52 +1069,52 @@ function HomeInner({ data }: { data: UsageData }) {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {/* Today's spend */}
-          <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-red-400/6 border border-red-400/20">
-            <div className="flex items-center gap-1.5">
+          <div className="fintech-card flex flex-col gap-1.5 p-3.5 rounded-xl">
+            <div className="flex items-center gap-1.5 mb-0.5">
               <Receipt className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Today's Spend</p>
             </div>
-            <p className="text-xl font-bold font-mono text-red-400">
+            <p className="text-xl font-bold font-mono tabular-nums text-red-400">
               ${insights.spentToday > 0 ? insights.spentToday.toFixed(2) : "0.00"}
             </p>
             <p className="text-[10px] text-muted-foreground">from today's tasks</p>
           </div>
 
           {/* Total saved */}
-          <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-emerald-400/6 border border-emerald-400/20">
-            <div className="flex items-center gap-1.5">
+          <div className="fintech-card flex flex-col gap-1.5 p-3.5 rounded-xl">
+            <div className="flex items-center gap-1.5 mb-0.5">
               <TrendingDown className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total Saved</p>
             </div>
-            <p className="text-xl font-bold font-mono text-emerald-400">+${totalSaved.toFixed(2)}</p>
+            <p className="text-xl font-bold font-mono tabular-nums text-emerald-400">+${totalSaved.toFixed(2)}</p>
             <p className="text-[10px] text-muted-foreground">via optimizations</p>
           </div>
 
           {/* Most used provider */}
-          <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-secondary/40 border border-border/40">
-            <div className="flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+          <div className="fintech-card flex flex-col gap-1.5 p-3.5 rounded-xl">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <Zap className="w-3.5 h-3.5 text-primary flex-shrink-0" />
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Top Provider</p>
             </div>
-            <div className="flex items-center gap-1.5 mt-0.5">
+            <div className="flex items-center gap-1.5">
               {insights.topProvider !== "—" ? (
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${PROVIDER_COLOR[insights.topProvider] ?? "text-foreground bg-secondary"}`}>
                   {insights.topProvider}
                 </span>
               ) : (
-                <p className="text-xl font-bold text-foreground">—</p>
+                <p className="text-xl font-bold text-muted-foreground">—</p>
               )}
             </div>
             <p className="text-[10px] text-muted-foreground">most tasks routed</p>
           </div>
 
           {/* Avg cost per task */}
-          <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-blue-400/6 border border-blue-400/20">
-            <div className="flex items-center gap-1.5">
+          <div className="fintech-card flex flex-col gap-1.5 p-3.5 rounded-xl">
+            <div className="flex items-center gap-1.5 mb-0.5">
               <ArrowUpRight className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg Cost / Task</p>
             </div>
-            <p className="text-xl font-bold font-mono text-blue-400">
+            <p className="text-xl font-bold font-mono tabular-nums text-blue-400">
               {insights.avgCost > 0 ? `$${insights.avgCost.toFixed(3)}` : "—"}
             </p>
             <p className="text-[10px] text-muted-foreground">across recent tasks</p>
@@ -1268,31 +1284,32 @@ function HomeInner({ data }: { data: UsageData }) {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, height: 0, marginBottom: 0 }}
                   transition={{ type: "spring", stiffness: 380, damping: 28 }}
-                  className={`relative flex items-center justify-between px-4 py-3 rounded-xl border transition-colors duration-500 ${
+                  className={`tx-row justify-between border transition-colors duration-500 ${
                     isNew
                       ? isSave || isDepos
-                        ? "bg-emerald-400/8 border-emerald-400/40 shadow-[0_0_12px_rgba(52,211,153,0.12)]"
-                        : "bg-primary/8 border-primary/40 shadow-[0_0_12px_rgba(139,92,246,0.12)]"
-                      : "bg-card/30 border-border/30 hover:bg-card/60"
+                        ? "bg-emerald-400/8 border-emerald-400/35 shadow-[0_0_12px_rgba(52,211,153,0.10)]"
+                        : "bg-primary/8 border-primary/35 shadow-[0_0_12px_rgba(139,92,246,0.10)]"
+                      : "bg-card/20 border-border/25"
                   }`}>
-                  {/* new indicator */}
-                  {isNew && (
-                    <motion.div initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ delay: 2.5, duration: 0.5 }}
-                      className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full bg-current opacity-80"
-                      style={{ color: isSave || isDepos ? "#34d399" : "#8b5cf6" }} />
-                  )}
+                  {/* Permanent type-color bar on left */}
+                  <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-7 rounded-r-full ${
+                    isSave  ? "bg-success"
+                  : isDepos ? "bg-emerald-400"
+                  : isMode  ? "bg-primary"
+                  : "bg-red-400/60"
+                  }`} />
 
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      isSave  ? "bg-success/15 text-success"
-                    : isDepos ? "bg-emerald-400/15 text-emerald-300"
-                    : isMode  ? "bg-primary/15 text-primary"
-                    : "bg-secondary text-muted-foreground"
+                  <div className="flex items-center gap-3 pl-1">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                      isSave  ? "bg-success/12 text-success"
+                    : isDepos ? "bg-emerald-400/12 text-emerald-300"
+                    : isMode  ? "bg-primary/12 text-primary"
+                    : "bg-secondary/80 text-muted-foreground"
                     }`}>
-                      {isSave  && <ArrowDownRight className="w-4 h-4" />}
-                      {isDepos && <Plus className="w-4 h-4" />}
-                      {isMode  && <Sparkles className="w-4 h-4" />}
-                      {isSpend && <ArrowUpRight className="w-4 h-4" />}
+                      {isSave  && <ArrowDownRight className="w-3.5 h-3.5" />}
+                      {isDepos && <Plus className="w-3.5 h-3.5" />}
+                      {isMode  && <Sparkles className="w-3.5 h-3.5" />}
+                      {isSpend && <ArrowUpRight className="w-3.5 h-3.5" />}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground leading-snug">{tx.label}</p>
@@ -1315,11 +1332,11 @@ function HomeInner({ data }: { data: UsageData }) {
                   </div>
 
                   {tx.amount !== 0 ? (
-                    <div className={`text-sm font-bold font-mono flex items-center gap-0.5 ${
+                    <div className={`text-sm font-bold font-mono tabular-nums flex items-center gap-0.5 ${
                       isSave || isDepos ? "text-success" : "text-red-400"
                     }`}>
                       <span>{isSave || isDepos ? "+" : "-"}</span>
-                      <span>${Math.abs(tx.amount).toFixed(2)}</span>
+                      <span>${Math.abs(tx.amount).toFixed(3)}</span>
                     </div>
                   ) : (
                     <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-full">mode</span>
