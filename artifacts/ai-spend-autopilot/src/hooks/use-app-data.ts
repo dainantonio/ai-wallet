@@ -2,6 +2,41 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getUsage, runOptimization } from "@workspace/api-client-react";
 import type { UsageData, OptimizationResult, ActivityItem } from "@workspace/api-client-react/src/generated/api.schemas";
 
+// ─── Cost summary types ───────────────────────────────────────────────────────
+export interface DailySpend {
+  day: string;
+  total_cost: number;
+  total_saved: number;
+  request_count: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface ModelSpend {
+  model: string;
+  provider: string;
+  request_count: number;
+  total_cost: number;
+  total_saved: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface CostTotals {
+  week_cost: number;
+  month_cost: number;
+  week_saved: number;
+  total_saved: number;
+  week_requests: number;
+  total_requests: number;
+}
+
+export interface CostSummary {
+  daily:   DailySpend[];
+  byModel: ModelSpend[];
+  totals:  CostTotals;
+}
+
 // Fallback data in case the actual API isn't implemented or fails
 const MOCK_ACTIVITY: ActivityItem[] = [
   { id: "act_1", type: "optimization", label: "Semantic Cache Hit", value: "-$0.04", timestamp: new Date(Date.now() - 120000).toISOString() },
@@ -28,6 +63,26 @@ const MOCK_USAGE_DATA: UsageData = {
   ],
   activity: MOCK_ACTIVITY
 };
+
+// ─── Real cost summary from Supabase via /api/costs/summary ──────────────────
+const EMPTY_SUMMARY: CostSummary = {
+  daily:   [],
+  byModel: [],
+  totals: { week_cost: 0, month_cost: 0, week_saved: 0, total_saved: 0, week_requests: 0, total_requests: 0 },
+};
+
+export function useCostSummary() {
+  return useQuery<CostSummary>({
+    queryKey: ["/api/costs/summary"],
+    queryFn: async () => {
+      const res = await fetch("/api/costs/summary", { credentials: "include" });
+      if (!res.ok) return EMPTY_SUMMARY;
+      return res.json() as Promise<CostSummary>;
+    },
+    refetchInterval: 30_000,
+    placeholderData: EMPTY_SUMMARY,
+  });
+}
 
 export function useUsageData() {
   return useQuery<UsageData>({

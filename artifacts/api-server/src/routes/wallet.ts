@@ -1,4 +1,51 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { db, costLogsTable } from "@workspace/db";
+
+// ─── Per-provider token-rate model ($/token) ─────────────────────────────────
+const PROVIDER_META: Record<string, { inRate: number; outRate: number; model: string }> = {
+  "OpenAI":    { inRate: 0.000050, outRate: 0.000150, model: "gpt-4o"                    },
+  "Anthropic": { inRate: 0.000075, outRate: 0.000240, model: "claude-3-5-sonnet-20241022" },
+  "Google":    { inRate: 0.0000125, outRate: 0.0000375, model: "gemini-1.5-pro"           },
+  "Meta":      { inRate: 0.000040, outRate: 0.000120, model: "llama-3.1-70b"              },
+  "Mistral":   { inRate: 0.000035, outRate: 0.000105, model: "mistral-large"              },
+};
+
+function tokensFromCost(cost: number, provider: string) {
+  const m = PROVIDER_META[provider];
+  if (!m || m.inRate === 0) return { inputTokens: 0, outputTokens: 0 };
+  // Assume 40 % of cost comes from input tokens, 60 % from output
+  return {
+    inputTokens:  Math.max(1, Math.round((cost * 0.40) / m.inRate)),
+    outputTokens: Math.max(1, Math.round((cost * 0.60) / m.outRate)),
+  };
+}
+
+// Fire-and-forget — never blocks the wallet response
+function logCostToDb(
+  userId: string,
+  provider: string,
+  cost: number,
+  saved: number,
+  optimized: boolean,
+  label: string,
+): void {
+  if (!db || !process.env.DATABASE_URL) return;
+  const meta = PROVIDER_META[provider];
+  const { inputTokens, outputTokens } = tokensFromCost(cost, provider);
+  db.insert(costLogsTable).values({
+    userId,
+    model:   meta?.model ?? provider.toLowerCase(),
+    provider,
+    inputTokens,
+    outputTokens,
+    cost,
+    saved,
+    optimized,
+    label,
+  }).catch((err: unknown) => {
+    console.warn("[wallet] DB cost log failed (non-fatal):", err);
+  });
+}
 
 const router: IRouter = Router();
 
@@ -125,6 +172,8 @@ router.post("/wallet/task", (req: Request, res: Response) => {
   wallet.balance      = +Math.max(0, wallet.balance + tx.amount).toFixed(2);
   wallet.transactions = [tx, ...wallet.transactions].slice(0, 10);
 
+  logCostToDb(req.user.id, tx.provider, cost, 0, false, tx.label);
+
   res.json({ wallet, newTransaction: tx });
 });
 
@@ -171,6 +220,15 @@ router.post("/wallet/optimize", (req: Request, res: Response) => {
   wallet.balance      = +Math.max(0, wallet.balance + net).toFixed(2);
   wallet.totalSaved   = +(wallet.totalSaved + saveAmt).toFixed(2);
   wallet.transactions = [...newTxs, ...wallet.transactions].slice(0, 10);
+
+  // Log each usage tx; credit the optimization saving against the first usage tx
+  for (const t of newTxs) {
+    if (t.type === "usage") {
+      const absCost = Math.abs(t.amount);
+      logCostToDb(req.user.id, t.provider, absCost, saveAmt, true, t.label);
+      break; // attach saving to first usage row only
+    }
+  }
 
   res.json({ wallet, newTransactions: newTxs, tip: pick(SAVINGS_TIPS) });
 });
