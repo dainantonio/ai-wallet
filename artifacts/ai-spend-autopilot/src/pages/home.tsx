@@ -63,22 +63,30 @@ const SPEND_CATEGORIES = [
 
 const FUNDS_OPTIONS = [10, 25, 50, 100];
 
-// ─── Pre-flight provider pool ─────────────────────────────────────────────────
-const PROVIDERS: { name: string; cheaper: string; company: string }[] = [
-  { name: "OpenAI GPT-4o",               cheaper: "GPT-4o mini",       company: "OpenAI"    },
-  { name: "Anthropic Claude 3.5 Sonnet", cheaper: "Claude 3 Haiku",    company: "Anthropic" },
-  { name: "Google Gemini 1.5 Pro",       cheaper: "Gemini 1.5 Flash",  company: "Google"    },
-  { name: "Meta Llama 3.1 70B",          cheaper: "Llama 3.1 8B",      company: "Meta"      },
-  { name: "Mistral Large",               cheaper: "Mistral 7B",        company: "Mistral"   },
+// ─── Pre-flight provider pool (tier = cost multiplier vs OpenAI baseline) ─────
+const PROVIDERS: { name: string; cheaper: string; company: string; tier: number }[] = [
+  { name: "OpenAI GPT-4o",               cheaper: "GPT-4o mini",       company: "OpenAI",    tier: 1.00 },
+  { name: "Anthropic Claude 3.5 Sonnet", cheaper: "Claude 3 Haiku",    company: "Anthropic", tier: 1.40 },
+  { name: "Google Gemini 1.5 Pro",       cheaper: "Gemini 1.5 Flash",  company: "Gemini",    tier: 0.70 },
+  { name: "Meta Llama 3.1 70B",          cheaper: "Llama 3.1 8B",      company: "Meta",      tier: 0.80 },
+  { name: "Mistral Large",               cheaper: "Mistral 7B",        company: "Mistral",   tier: 0.75 },
 ];
 
-const USAGE_PROVIDERS = ["OpenAI", "Anthropic", "Google"];
+// Cost tier label shown in comparison table
+const TIER_LABEL: Record<string, string> = {
+  "Gemini": "lower", "Meta": "lower", "Mistral": "lower",
+  "OpenAI": "medium",
+  "Anthropic": "higher",
+};
+
+const USAGE_PROVIDERS = ["OpenAI", "Anthropic", "Gemini"];
 
 // ─── Provider badge colors ────────────────────────────────────────────────────
 const PROVIDER_COLOR: Record<string, string> = {
   "OpenAI":    "text-blue-400 bg-blue-400/10",
   "Anthropic": "text-orange-400 bg-orange-400/10",
-  "Google":    "text-green-400 bg-green-400/10",
+  "Gemini":    "text-green-400 bg-green-400/10",
+  "Google":    "text-green-400 bg-green-400/10",  // legacy alias
   "Meta":      "text-sky-400 bg-sky-400/10",
   "Mistral":   "text-purple-400 bg-purple-400/10",
   "AI Wallet": "text-violet-400 bg-violet-400/10",
@@ -244,16 +252,34 @@ function ActionBtn({ icon, label, desc, loading, accent, border, bg, iconBg, onC
 interface PreFlightModalProps {
   provider: string;
   cheaper: string;
+  company: string;
+  tier: number;
   estimatedCost: number;
   onContinue: () => void;
   onOptimize: () => void;
   onClose: () => void;
 }
-function PreFlightModal({ provider, cheaper, estimatedCost, onContinue, onOptimize, onClose }: PreFlightModalProps) {
+function PreFlightModal({ provider, cheaper, company, tier, estimatedCost, onContinue, onOptimize, onClose }: PreFlightModalProps) {
+  const baseCost = estimatedCost / tier;
+  const isGemini = company === "Gemini";
+
+  // Three-provider cost comparison (sorted cheapest first)
+  const comparison = [
+    { name: "Gemini",    cost: +(baseCost * 0.70).toFixed(3) },
+    { name: "OpenAI",    cost: +(baseCost * 1.00).toFixed(3) },
+    { name: "Anthropic", cost: +(baseCost * 1.40).toFixed(3) },
+  ].sort((a, b) => a.cost - b.cost);
+
   const lo = (estimatedCost * 0.85).toFixed(3);
   const hi = (estimatedCost * 1.20).toFixed(3);
-  const optimizedCost = (estimatedCost * 0.60).toFixed(3);
-  const savedAmt = (estimatedCost - estimatedCost * 0.60).toFixed(2);
+
+  const optimizedCost = isGemini
+    ? +(estimatedCost * 0.60).toFixed(3)    // already Gemini → model downgrade
+    : +(baseCost * 0.70).toFixed(3);        // switch to Gemini
+  const savedAmt = (estimatedCost - optimizedCost).toFixed(2);
+  const savePct  = Math.round((1 - optimizedCost / estimatedCost) * 100);
+  const optTarget = isGemini ? cheaper : "Gemini 1.5 Flash";
+  const optBtnLabel = isGemini ? "Optimize & Continue" : "Switch to Gemini";
 
   return (
     <motion.div
@@ -287,15 +313,44 @@ function PreFlightModal({ provider, cheaper, estimatedCost, onContinue, onOptimi
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Provider + cost */}
+          {/* Provider + cost range */}
           <div className="flex items-center justify-between p-3.5 rounded-xl bg-secondary/40 border border-border/40">
             <div>
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Provider</p>
-              <p className="text-sm font-bold text-foreground">{provider}</p>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${PROVIDER_COLOR[company] ?? ""}`}>{company}</span>
+                <p className="text-sm font-bold text-foreground">{provider.replace(/^[^\s]+ /, "")}</p>
+              </div>
             </div>
             <div className="text-right">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Est. Cost</p>
               <p className="text-sm font-bold font-mono text-foreground">${lo} – ${hi}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{TIER_LABEL[company] ?? ""} tier</p>
+            </div>
+          </div>
+
+          {/* Provider cost comparison */}
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Cost Comparison</p>
+            <div className="space-y-1.5">
+              {comparison.map((p, i) => {
+                const isCurrent  = p.name === company;
+                const isCheapest = i === 0;
+                return (
+                  <div key={p.name}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${isCurrent ? "bg-primary/8 border border-primary/25" : "bg-secondary/30"}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${PROVIDER_COLOR[p.name]}`}>{p.name}</span>
+                      {isCurrent  && <span className="text-[10px] text-primary font-medium">current</span>}
+                      {isCheapest && !isCurrent && <span className="text-[10px] text-emerald-400 font-medium">cheapest</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-semibold text-foreground">${p.cost}</span>
+                      <span className="text-[10px] text-muted-foreground w-12 text-right">{TIER_LABEL[p.name]}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -306,14 +361,19 @@ function PreFlightModal({ provider, cheaper, estimatedCost, onContinue, onOptimi
                 <Lightbulb className="w-3.5 h-3.5" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-amber-400 mb-1">Optimization Available</p>
+                <p className="text-xs font-bold text-amber-400 mb-1">
+                  {isGemini ? "Optimization Available" : "Cheaper Provider Available"}
+                </p>
                 <p className="text-sm text-foreground leading-snug">
-                  Switch to <span className="font-semibold text-emerald-400">{cheaper}</span> and save ~40%
+                  {isGemini
+                    ? <>Switch to <span className="font-semibold text-emerald-400">{optTarget}</span> and save ~{savePct}%</>
+                    : <>Route to <span className="font-semibold text-emerald-400">Gemini 1.5 Flash</span> and save ~{savePct}%</>
+                  }
                 </p>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-xs text-muted-foreground line-through font-mono">${estimatedCost.toFixed(3)}</span>
                   <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                  <span className="text-xs font-bold text-emerald-400 font-mono">${optimizedCost}</span>
+                  <span className="text-xs font-bold text-emerald-400 font-mono">${optimizedCost.toFixed(3)}</span>
                   <span className="text-xs font-semibold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">-${savedAmt}</span>
                 </div>
               </div>
@@ -335,7 +395,7 @@ function PreFlightModal({ provider, cheaper, estimatedCost, onContinue, onOptimi
             className="flex-1 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 hover:bg-emerald-500/30 text-sm font-bold text-emerald-400 transition-colors flex items-center justify-center gap-1.5"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            Optimize &amp; Continue
+            {optBtnLabel}
           </motion.button>
         </div>
       </motion.div>
@@ -372,7 +432,7 @@ function HomeInner({ data }: { data: UsageData }) {
   const [isOptimizing, setIsOptimizing]     = useState(false);
 
   // ── Pre-flight modal ─────────────────────────────────────────────────────
-  const [preFlight, setPreFlight] = useState<{ provider: string; cheaper: string; company: string; estimatedCost: number } | null>(null);
+  const [preFlight, setPreFlight] = useState<{ provider: string; cheaper: string; company: string; tier: number; estimatedCost: number } | null>(null);
 
   // ── Savings tip ─────────────────────────────────────────────────────────
   const [savingsTip, setSavingsTip]         = useState<string | null>(null);
@@ -486,27 +546,48 @@ function HomeInner({ data }: { data: UsageData }) {
     if (isRunningTask || !wallet) return;
     const taskCostRange: Record<SpendMode, [number, number]> = { saver: [0.01, 0.04], balanced: [0.02, 0.10], performance: [0.05, 0.20] };
     const [lo, hi] = taskCostRange[wallet.spendMode];
-    const estimatedCost = +rand(lo, hi);
-    const { name, cheaper, company } = pick(PROVIDERS);
-    setPreFlight({ provider: name, cheaper, company, estimatedCost });
+    const baseCost = +rand(lo, hi);
+    const { name, cheaper, company, tier } = pick(PROVIDERS);
+    const estimatedCost = +(baseCost * tier).toFixed(3);
+    setPreFlight({ provider: name, cheaper, company, tier, estimatedCost });
   }, [isRunningTask, wallet]);
 
   // ── Confirm task (from modal) ────────────────────────────────────────────
   const handleConfirmTask = useCallback(async (optimized: boolean) => {
     if (!preFlight || !wallet) return;
-    const { cheaper, company, estimatedCost } = preFlight;
+    const { cheaper, company, tier, estimatedCost } = preFlight;
     setPreFlight(null);
     setIsRunningTask(true);
 
     await new Promise(r => setTimeout(r, 440));
 
-    const finalCost = optimized ? +(estimatedCost * 0.60).toFixed(3) : estimatedCost;
-    const txs: WalletTx[] = [];
+    const isGemini = company === "Gemini";
+    let finalCost: number;
+    let usedProvider: string;
+    let savingsLabel: string | null = null;
 
-    txs.push({ id: makeId(), label: pick(CLIENT_TASK_LABELS), amount: -finalCost, timestamp: Date.now(), type: "usage", provider: company });
     if (optimized) {
+      if (isGemini) {
+        // Already Gemini — model downgrade
+        finalCost   = +(estimatedCost * 0.60).toFixed(3);
+        usedProvider = "Gemini";
+        savingsLabel = `Saved $${(estimatedCost - finalCost).toFixed(2)} using ${cheaper}`;
+      } else {
+        // Switch to Gemini
+        finalCost   = +((estimatedCost / tier) * 0.70).toFixed(3);
+        usedProvider = "Gemini";
+        savingsLabel = `Saved $${(estimatedCost - finalCost).toFixed(2)} routing to Gemini 1.5 Flash`;
+      }
+    } else {
+      finalCost   = estimatedCost;
+      usedProvider = company;
+    }
+
+    const txs: WalletTx[] = [];
+    txs.push({ id: makeId(), label: pick(CLIENT_TASK_LABELS), amount: -finalCost, timestamp: Date.now(), type: "usage", provider: usedProvider });
+    if (optimized && savingsLabel) {
       const savedAmt = +(estimatedCost - finalCost).toFixed(2);
-      txs.push({ id: makeId(), label: `Saved $${savedAmt.toFixed(2)} using ${cheaper}`, amount: savedAmt, timestamp: Date.now() - 50, type: "optimization", provider: "AI Wallet" });
+      txs.push({ id: makeId(), label: savingsLabel, amount: savedAmt, timestamp: Date.now() - 50, type: "optimization", provider: "AI Wallet" });
     }
 
     const net = txs.reduce((s, t) => s + t.amount, 0);
@@ -1175,6 +1256,8 @@ function HomeInner({ data }: { data: UsageData }) {
             key="preflight"
             provider={preFlight.provider}
             cheaper={preFlight.cheaper}
+            company={preFlight.company}
+            tier={preFlight.tier}
             estimatedCost={preFlight.estimatedCost}
             onContinue={() => handleConfirmTask(false)}
             onOptimize={() => handleConfirmTask(true)}
