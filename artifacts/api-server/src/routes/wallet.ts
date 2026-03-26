@@ -9,6 +9,7 @@ export interface WalletTx {
   amount: number;
   timestamp: number;
   type: "optimization" | "usage" | "mode_switch" | "deposit";
+  provider: string;
 }
 
 export type SpendMode = "saver" | "balanced" | "performance";
@@ -66,6 +67,8 @@ const SAVINGS_TIPS = [
   "Pre-process prompts to strip boilerplate — fewer input tokens = lower cost.",
 ];
 
+const TX_PROVIDERS = ["OpenAI", "Anthropic", "Google"];
+
 function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 function rand(min: number, max: number, d = 3): number { return +(Math.random() * (max - min) + min).toFixed(d); }
 function makeId(): string { return `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; }
@@ -76,11 +79,11 @@ function defaultWallet(): WalletState {
     totalSaved: 34.20,
     spendMode: "balanced",
     transactions: [
-      { id: "init-1", label: "Semantic cache hit",            amount:  12.40, timestamp: Date.now() - 2 * 60000,  type: "optimization" },
-      { id: "init-2", label: "GPT-4o API request batch",     amount: -0.032, timestamp: Date.now() - 5 * 60000,  type: "usage" },
-      { id: "init-3", label: "Smart routing: GPT-4o → mini", amount:   9.60, timestamp: Date.now() - 10 * 60000, type: "optimization" },
-      { id: "init-4", label: "Document summarization",       amount: -0.018, timestamp: Date.now() - 20 * 60000, type: "usage" },
-      { id: "init-5", label: "Token budget optimization",    amount:   6.20, timestamp: Date.now() - 40 * 60000, type: "optimization" },
+      { id: "init-1", label: "Semantic cache hit",            amount:  12.40, timestamp: Date.now() - 2  * 60000, type: "optimization", provider: "AI Wallet" },
+      { id: "init-2", label: "GPT-4o API request batch",     amount: -0.032, timestamp: Date.now() - 5  * 60000, type: "usage",        provider: "OpenAI"    },
+      { id: "init-3", label: "Smart routing: GPT-4o → mini", amount:   9.60, timestamp: Date.now() - 10 * 60000, type: "optimization", provider: "AI Wallet" },
+      { id: "init-4", label: "Document summarization",       amount: -0.018, timestamp: Date.now() - 20 * 60000, type: "usage",        provider: "Anthropic" },
+      { id: "init-5", label: "Token budget optimization",    amount:   6.20, timestamp: Date.now() - 40 * 60000, type: "optimization", provider: "AI Wallet" },
     ],
   };
 }
@@ -116,6 +119,7 @@ router.post("/wallet/task", (req: Request, res: Response) => {
     amount: -cost,
     timestamp: Date.now(),
     type: "usage",
+    provider: pick(TX_PROVIDERS),
   };
 
   wallet.balance      = +Math.max(0, wallet.balance + tx.amount).toFixed(2);
@@ -139,6 +143,7 @@ router.post("/wallet/funds", (req: Request, res: Response) => {
     amount,
     timestamp: Date.now(),
     type: "deposit",
+    provider: "Wallet",
   };
 
   wallet.balance      = +(wallet.balance + amount).toFixed(2);
@@ -155,11 +160,11 @@ router.post("/wallet/optimize", (req: Request, res: Response) => {
   const newTxs: WalletTx[] = [];
 
   const saveAmt = rand(2.5, 9.0, 2);
-  newTxs.push({ id: makeId(), label: pick(SAVE_LABELS), amount: saveAmt,        timestamp: Date.now(),       type: "optimization" });
+  newTxs.push({ id: makeId(), label: pick(SAVE_LABELS), amount: saveAmt,        timestamp: Date.now(),       type: "optimization", provider: "AI Wallet"       });
 
   const numCosts = Math.random() > 0.45 ? 2 : 1;
   for (let i = 0; i < numCosts; i++) {
-    newTxs.push({ id: makeId(), label: pick(COST_LABELS), amount: -rand(0.4, 2.8, 2), timestamp: Date.now() - (i + 1) * 800, type: "usage" });
+    newTxs.push({ id: makeId(), label: pick(COST_LABELS), amount: -rand(0.4, 2.8, 2), timestamp: Date.now() - (i + 1) * 800, type: "usage", provider: pick(TX_PROVIDERS) });
   }
 
   const net = newTxs.reduce((s, t) => s + t.amount, 0);
@@ -184,7 +189,7 @@ router.post("/wallet/mode", (req: Request, res: Response) => {
   const modeTx: WalletTx = {
     id: makeId(),
     label: `Switched to ${(mode as string)[0].toUpperCase() + (mode as string).slice(1)} Mode → ${modeLabels[mode as SpendMode]}`,
-    amount: 0, timestamp: Date.now(), type: "mode_switch",
+    amount: 0, timestamp: Date.now(), type: "mode_switch", provider: "AI Wallet",
   };
 
   wallet.spendMode    = mode as SpendMode;

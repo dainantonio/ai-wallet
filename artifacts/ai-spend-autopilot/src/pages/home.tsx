@@ -25,6 +25,7 @@ interface WalletTx {
   amount: number;
   timestamp: number;
   type: "optimization" | "usage" | "mode_switch" | "deposit";
+  provider: string;
 }
 
 interface WalletState {
@@ -63,13 +64,26 @@ const SPEND_CATEGORIES = [
 const FUNDS_OPTIONS = [10, 25, 50, 100];
 
 // ─── Pre-flight provider pool ─────────────────────────────────────────────────
-const PROVIDERS: { name: string; cheaper: string }[] = [
-  { name: "OpenAI GPT-4o",               cheaper: "GPT-4o mini"       },
-  { name: "Anthropic Claude 3.5 Sonnet", cheaper: "Claude 3 Haiku"    },
-  { name: "Google Gemini 1.5 Pro",       cheaper: "Gemini 1.5 Flash"  },
-  { name: "Meta Llama 3.1 70B",          cheaper: "Llama 3.1 8B"      },
-  { name: "Mistral Large",               cheaper: "Mistral 7B"        },
+const PROVIDERS: { name: string; cheaper: string; company: string }[] = [
+  { name: "OpenAI GPT-4o",               cheaper: "GPT-4o mini",       company: "OpenAI"    },
+  { name: "Anthropic Claude 3.5 Sonnet", cheaper: "Claude 3 Haiku",    company: "Anthropic" },
+  { name: "Google Gemini 1.5 Pro",       cheaper: "Gemini 1.5 Flash",  company: "Google"    },
+  { name: "Meta Llama 3.1 70B",          cheaper: "Llama 3.1 8B",      company: "Meta"      },
+  { name: "Mistral Large",               cheaper: "Mistral 7B",        company: "Mistral"   },
 ];
+
+const USAGE_PROVIDERS = ["OpenAI", "Anthropic", "Google"];
+
+// ─── Provider badge colors ────────────────────────────────────────────────────
+const PROVIDER_COLOR: Record<string, string> = {
+  "OpenAI":    "text-blue-400 bg-blue-400/10",
+  "Anthropic": "text-orange-400 bg-orange-400/10",
+  "Google":    "text-green-400 bg-green-400/10",
+  "Meta":      "text-sky-400 bg-sky-400/10",
+  "Mistral":   "text-purple-400 bg-purple-400/10",
+  "AI Wallet": "text-violet-400 bg-violet-400/10",
+  "Wallet":    "text-emerald-400 bg-emerald-400/10",
+};
 
 const CLIENT_TASK_LABELS = [
   "Ran: Code explanation task", "Ran: Email draft generation",
@@ -107,11 +121,11 @@ function defaultClientWallet(): WalletState {
     totalSaved: 34.20,
     spendMode: "balanced",
     transactions: [
-      { id: "init-1", label: "Semantic cache hit",            amount:  12.40, timestamp: Date.now() - 2  * 60000, type: "optimization" },
-      { id: "init-2", label: "GPT-4o API request batch",     amount: -0.032, timestamp: Date.now() - 5  * 60000, type: "usage"        },
-      { id: "init-3", label: "Smart routing: GPT-4o → mini", amount:   9.60, timestamp: Date.now() - 10 * 60000, type: "optimization" },
-      { id: "init-4", label: "Document summarization",       amount: -0.018, timestamp: Date.now() - 20 * 60000, type: "usage"        },
-      { id: "init-5", label: "Token budget optimization",    amount:   6.20, timestamp: Date.now() - 40 * 60000, type: "optimization" },
+      { id: "init-1", label: "Semantic cache hit",            amount:  12.40, timestamp: Date.now() - 2  * 60000, type: "optimization", provider: "AI Wallet" },
+      { id: "init-2", label: "GPT-4o API request batch",     amount: -0.032, timestamp: Date.now() - 5  * 60000, type: "usage",        provider: "OpenAI"    },
+      { id: "init-3", label: "Smart routing: GPT-4o → mini", amount:   9.60, timestamp: Date.now() - 10 * 60000, type: "optimization", provider: "AI Wallet" },
+      { id: "init-4", label: "Document summarization",       amount: -0.018, timestamp: Date.now() - 20 * 60000, type: "usage",        provider: "Anthropic" },
+      { id: "init-5", label: "Token budget optimization",    amount:   6.20, timestamp: Date.now() - 40 * 60000, type: "optimization", provider: "AI Wallet" },
     ],
   };
 }
@@ -343,7 +357,7 @@ function HomeInner({ data }: { data: UsageData }) {
   const [isOptimizing, setIsOptimizing]     = useState(false);
 
   // ── Pre-flight modal ─────────────────────────────────────────────────────
-  const [preFlight, setPreFlight] = useState<{ provider: string; cheaper: string; estimatedCost: number } | null>(null);
+  const [preFlight, setPreFlight] = useState<{ provider: string; cheaper: string; company: string; estimatedCost: number } | null>(null);
 
   // ── Savings tip ─────────────────────────────────────────────────────────
   const [savingsTip, setSavingsTip]         = useState<string | null>(null);
@@ -386,7 +400,7 @@ function HomeInner({ data }: { data: UsageData }) {
       const tickCostRange: Record<SpendMode, [number, number]> = { saver: [0.04, 0.20], balanced: [0.08, 0.65], performance: [0.20, 1.20] };
       const [lo, hi] = tickCostRange[wallet.spendMode];
       const cost = +rand(lo, hi);
-      const tx: WalletTx = { id: makeId(), label: pick(COST_LABELS), amount: -cost, timestamp: Date.now(), type: "usage" };
+      const tx: WalletTx = { id: makeId(), label: pick(COST_LABELS), amount: -cost, timestamp: Date.now(), type: "usage", provider: pick(USAGE_PROVIDERS) };
       applyWalletUpdate({ ...wallet, balance: +(wallet.balance + cost).toFixed(2), transactions: [tx, ...wallet.transactions].slice(0, 10) });
     };
     const iv = setInterval(tick, 10000);
@@ -437,14 +451,14 @@ function HomeInner({ data }: { data: UsageData }) {
     const taskCostRange: Record<SpendMode, [number, number]> = { saver: [0.01, 0.04], balanced: [0.02, 0.10], performance: [0.05, 0.20] };
     const [lo, hi] = taskCostRange[wallet.spendMode];
     const estimatedCost = +rand(lo, hi);
-    const { name, cheaper } = pick(PROVIDERS);
-    setPreFlight({ provider: name, cheaper, estimatedCost });
+    const { name, cheaper, company } = pick(PROVIDERS);
+    setPreFlight({ provider: name, cheaper, company, estimatedCost });
   }, [isRunningTask, wallet]);
 
   // ── Confirm task (from modal) ────────────────────────────────────────────
   const handleConfirmTask = useCallback(async (optimized: boolean) => {
     if (!preFlight || !wallet) return;
-    const { cheaper, estimatedCost } = preFlight;
+    const { cheaper, company, estimatedCost } = preFlight;
     setPreFlight(null);
     setIsRunningTask(true);
 
@@ -453,10 +467,10 @@ function HomeInner({ data }: { data: UsageData }) {
     const finalCost = optimized ? +(estimatedCost * 0.60).toFixed(3) : estimatedCost;
     const txs: WalletTx[] = [];
 
-    txs.push({ id: makeId(), label: pick(CLIENT_TASK_LABELS), amount: -finalCost, timestamp: Date.now(), type: "usage" });
+    txs.push({ id: makeId(), label: pick(CLIENT_TASK_LABELS), amount: -finalCost, timestamp: Date.now(), type: "usage", provider: company });
     if (optimized) {
       const savedAmt = +(estimatedCost - finalCost).toFixed(2);
-      txs.push({ id: makeId(), label: `Saved $${savedAmt.toFixed(2)} using ${cheaper}`, amount: savedAmt, timestamp: Date.now() - 50, type: "optimization" });
+      txs.push({ id: makeId(), label: `Saved $${savedAmt.toFixed(2)} using ${cheaper}`, amount: savedAmt, timestamp: Date.now() - 50, type: "optimization", provider: "AI Wallet" });
     }
 
     const net = txs.reduce((s, t) => s + t.amount, 0);
@@ -487,7 +501,7 @@ function HomeInner({ data }: { data: UsageData }) {
     } catch { /* fall through to simulation */ }
     if (!handled) {
       await new Promise(r => setTimeout(r, 380));
-      const tx: WalletTx = { id: makeId(), label: `Funds added — $${amount.toFixed(2)} top-up`, amount, timestamp: Date.now(), type: "deposit" };
+      const tx: WalletTx = { id: makeId(), label: `Funds added — $${amount.toFixed(2)} top-up`, amount, timestamp: Date.now(), type: "deposit", provider: "Wallet" };
       applyWalletUpdate(
         { ...wallet, balance: +(wallet.balance + amount).toFixed(2), transactions: [tx, ...wallet.transactions].slice(0, 10) },
         [tx.id],
@@ -516,10 +530,10 @@ function HomeInner({ data }: { data: UsageData }) {
       await new Promise(r => setTimeout(r, 700));
       const newTxs: WalletTx[] = [];
       const saveAmt = +rand(2.5, 9.0);
-      newTxs.push({ id: makeId(), label: pick(CLIENT_SAVE_LABELS), amount: saveAmt, timestamp: Date.now(), type: "optimization" });
+      newTxs.push({ id: makeId(), label: pick(CLIENT_SAVE_LABELS), amount: saveAmt, timestamp: Date.now(), type: "optimization", provider: "AI Wallet" });
       const numCosts = Math.random() > 0.45 ? 2 : 1;
       for (let i = 0; i < numCosts; i++) {
-        newTxs.push({ id: makeId(), label: pick(CLIENT_COST_LABELS), amount: -+rand(0.40, 2.80), timestamp: Date.now() - (i + 1) * 800, type: "usage" });
+        newTxs.push({ id: makeId(), label: pick(CLIENT_COST_LABELS), amount: -+rand(0.40, 2.80), timestamp: Date.now() - (i + 1) * 800, type: "usage", provider: pick(USAGE_PROVIDERS) });
       }
       const net = newTxs.reduce((s, t) => s + t.amount, 0);
       applyWalletUpdate(
@@ -557,7 +571,7 @@ function HomeInner({ data }: { data: UsageData }) {
       const tx: WalletTx = {
         id: makeId(),
         label: `Switched to ${mode[0].toUpperCase() + mode.slice(1)} Mode → ${modeLabels[mode]}`,
-        amount: 0, timestamp: Date.now(), type: "mode_switch",
+        amount: 0, timestamp: Date.now(), type: "mode_switch", provider: "AI Wallet",
       };
       applyWalletUpdate({ ...wallet, spendMode: mode, transactions: [tx, ...wallet.transactions].slice(0, 10) });
     }
@@ -1057,8 +1071,13 @@ function HomeInner({ data }: { data: UsageData }) {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground leading-snug">{tx.label}</p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                         <p className="text-xs text-muted-foreground">{formatRelTime(tx.timestamp)}</p>
+                        {tx.provider && (
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${PROVIDER_COLOR[tx.provider] ?? "text-muted-foreground bg-secondary"}`}>
+                            {tx.provider}
+                          </span>
+                        )}
                         {isNew && (
                           <motion.span initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ delay: 2.8, duration: 0.4 }}
                             className="text-[10px] font-bold text-current px-1.5 py-0.5 rounded-full bg-current/10"
