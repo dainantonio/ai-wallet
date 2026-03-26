@@ -1286,7 +1286,7 @@ function HomeInner({ data }: { data: UsageData }) {
           <h2 className="text-xl font-display font-bold text-foreground">Savings Insights</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-          {data.savingsInsights.topSavings.map(item => (
+          {(data?.savingsInsights?.topSavings ?? []).map(item => (
             <div key={item.label} className="flex items-start gap-3 p-4 rounded-xl bg-secondary/40 border border-border/40">
               <div className={`p-2 rounded-lg flex-shrink-0 ${categoryColor(item.category)}`}>{categoryIcon(item.category)}</div>
               <div className="min-w-0">
@@ -1301,7 +1301,7 @@ function HomeInner({ data }: { data: UsageData }) {
             <div className="p-2 rounded-lg text-red-400 bg-red-400/10 flex-shrink-0"><AlertTriangle className="w-4 h-4" /></div>
             <div>
               <p className="text-sm text-muted-foreground">Estimated Wasted Spend</p>
-              <p className="text-xl font-bold text-red-400">{formatCurrency(data.savingsInsights.wastedSpend)}</p>
+              <p className="text-xl font-bold text-red-400">{formatCurrency(data?.savingsInsights?.wastedSpend ?? 0)}</p>
               <p className="text-xs text-muted-foreground mt-0.5">requests that could be cheaper</p>
             </div>
           </div>
@@ -1309,7 +1309,7 @@ function HomeInner({ data }: { data: UsageData }) {
             <div className="p-2 rounded-lg text-primary bg-primary/10 flex-shrink-0"><Lightbulb className="w-4 h-4" /></div>
             <div>
               <p className="text-sm font-medium text-primary mb-1">Recommendation</p>
-              <p className="text-sm text-foreground leading-relaxed">{data.savingsInsights.recommendation}</p>
+              <p className="text-sm text-foreground leading-relaxed">{data?.savingsInsights?.recommendation ?? ""}</p>
             </div>
           </div>
         </div>
