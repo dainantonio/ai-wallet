@@ -49,3 +49,7 @@ Thumbs.db
 .local/
 
 .env
+.env.local
+.env.*.local
+**/.env.local
+**/.env.*.local
