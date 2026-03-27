@@ -143,4 +143,94 @@ router.get("/costs/summary", async (req: Request, res: Response) => {
   }
 });
 
+// ─── POST /api/costs/alert-check ─────────────────────────────────────────────
+// Compares the current user's month-to-date spend against a caller-supplied
+// threshold. Safe to call unauthenticated from the extension — falls back to
+// zero spend so the UI never breaks.
+router.post("/costs/alert-check", async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const raw = (req.body as { threshold?: unknown }).threshold;
+  const threshold = Number(raw);
+  if (isNaN(threshold) || threshold < 0) {
+    res.status(400).json({ error: "threshold must be a non-negative number" });
+    return;
+  }
+
+  if (!db) {
+    res.json({ currentSpend: 0, threshold, exceeded: false, percentUsed: 0 });
+    return;
+  }
+
+  try {
+    const result = await db.execute(sql`
+      SELECT COALESCE(SUM(cost), 0)::float AS current_spend
+      FROM ai_cost_logs
+      WHERE user_id     = ${req.user.id}
+        AND created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')
+    `);
+
+    const currentSpend  = Number((result.rows[0] as { current_spend: number }).current_spend ?? 0);
+    const percentUsed   = threshold > 0 ? +((currentSpend / threshold) * 100).toFixed(2) : 0;
+    const exceeded      = threshold > 0 && currentSpend >= threshold;
+
+    res.json({ currentSpend: +currentSpend.toFixed(4), threshold, exceeded, percentUsed });
+  } catch (err) {
+    console.error("[costs/alert-check]", err);
+    res.json({ currentSpend: 0, threshold, exceeded: false, percentUsed: 0 });
+  }
+});
+
+// ─── GET /api/costs/monthly-summary ──────────────────────────────────────────
+// Returns this month's total, last month's total, MoM change %, and daily avg.
+router.get("/costs/monthly-summary", async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const EMPTY = { thisMonth: 0, lastMonth: 0, momChangePercent: 0, dailyAverage: 0 };
+
+  if (!db) { res.json(EMPTY); return; }
+
+  try {
+    const result = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(
+          CASE WHEN created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')
+               THEN cost END
+        ), 0)::float AS this_month,
+        COALESCE(SUM(
+          CASE WHEN created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC') - INTERVAL '1 month'
+                AND created_at <  DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')
+               THEN cost END
+        ), 0)::float AS last_month
+      FROM ai_cost_logs
+      WHERE user_id   = ${req.user.id}
+        AND created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC') - INTERVAL '1 month'
+    `);
+
+    const row = result.rows[0] as { this_month: number; last_month: number } | undefined;
+    const thisMonth  = Number(row?.this_month  ?? 0);
+    const lastMonth  = Number(row?.last_month  ?? 0);
+
+    // MoM change: positive = spend went up, negative = spend went down
+    const momChangePercent = lastMonth > 0
+      ? +((((thisMonth - lastMonth) / lastMonth) * 100)).toFixed(2)
+      : 0;
+
+    // Daily average = this month's spend / days elapsed so far (min 1)
+    const now      = new Date();
+    const daysSoFar = Math.max(1, now.getUTCDate());
+    const dailyAverage = +( thisMonth / daysSoFar ).toFixed(4);
+
+    res.json({
+      thisMonth:        +thisMonth.toFixed(4),
+      lastMonth:        +lastMonth.toFixed(4),
+      momChangePercent,
+      dailyAverage,
+    });
+  } catch (err) {
+    console.error("[costs/monthly-summary]", err);
+    res.json({ thisMonth: 0, lastMonth: 0, momChangePercent: 0, dailyAverage: 0 });
+  }
+});
+
 export default router;
