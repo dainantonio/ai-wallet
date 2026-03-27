@@ -235,7 +235,7 @@ function ActionBtn({ icon, label, desc, loading, accent, border, bg, iconBg, onC
       whileTap={{ scale: 0.93 }}
       whileHover={{ scale: 1.03, y: -2 }}
       transition={{ type: "spring", stiffness: 400, damping: 22 }}
-      className={`relative flex flex-col items-center gap-2 sm:gap-2.5 px-2 sm:px-4 py-4 rounded-2xl border ${border} ${bg} transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-center overflow-hidden group w-full min-h-[88px]`}
+      className={`relative flex flex-col items-center gap-2 sm:gap-2.5 px-2 sm:px-4 py-4 rounded-2xl border ${border} ${bg} transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-center overflow-hidden group w-full min-h-[88px] btn-pulse-active`}
     >
       {/* Shine on hover */}
       <div className="absolute inset-0 bg-gradient-to-b from-white/4 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-250 pointer-events-none" />
@@ -825,11 +825,11 @@ function HomeInner({ data }: { data: UsageData }) {
 
       <header className="mb-6">
         <motion.h1 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-          className="text-3xl md:text-4xl font-display font-bold text-foreground">
+          className="text-3xl md:text-5xl font-display font-black tracking-tight heading-gradient">
           {displayName}
         </motion.h1>
         <motion.p initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
-          className="text-muted-foreground mt-1">
+          className="text-muted-foreground mt-1.5 text-sm">
           Your AI spending, optimized and in control.
         </motion.p>
       </header>
@@ -950,7 +950,7 @@ function HomeInner({ data }: { data: UsageData }) {
       {/* ── Quick Actions ── */}
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
         className="mb-5">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quick Actions</p>
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.15em] mb-3">Quick Actions</p>
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {/* Run AI Task */}
           <ActionBtn
@@ -1055,7 +1055,7 @@ function HomeInner({ data }: { data: UsageData }) {
         <div className="flex items-center gap-2 mb-4">
           <Sparkles className="w-4 h-4 text-muted-foreground" />
           <p className="text-sm font-semibold text-foreground">Spend Mode</p>
-          <span className="text-xs text-muted-foreground">— affects routing & savings projection</span>
+          <span className="text-[11px] text-muted-foreground/70">— affects routing &amp; savings projection</span>
         </div>
         <div className="grid grid-cols-3 gap-3">
           {MODES.map((mode) => {
@@ -1112,22 +1112,25 @@ function HomeInner({ data }: { data: UsageData }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <StatCard delay={0.2} title="Available Credits"
           value={`$${(data.credits + (isSimulated ? extraSaved : 0)).toFixed(1)}`}
-          icon={<Wallet className="w-4 h-4" />} />
+          icon={<Wallet className="w-4 h-4" />} className="stat-card-premium" />
         <StatCard delay={0.3} title="Avg Cost / Request"
           value={`$${isSimulated ? (projSpend / data.totalRequests).toFixed(3) : data.avgCost.toFixed(3)}`}
-          trend={{ value: isSimulated ? `-${(((data.avgCost - projSpend / data.totalRequests) / data.avgCost) * 100).toFixed(1)}%` : "-4.2%", isPositive: true }} />
+          trend={{ value: isSimulated ? `-${(((data.avgCost - projSpend / data.totalRequests) / data.avgCost) * 100).toFixed(1)}%` : "-4.2%", isPositive: true }}
+          className="stat-card-premium" />
         <StatCard delay={0.4} title="Top Tool" value={data.topTool}
-          icon={<BrainCircuit className="w-4 h-4" />} className="whitespace-nowrap overflow-hidden text-ellipsis" />
+          icon={<BrainCircuit className="w-4 h-4" />} className="stat-card-premium whitespace-nowrap overflow-hidden text-ellipsis" />
       </div>
 
       {/* ── Spending Insights ── */}
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
         className="glass-panel rounded-2xl p-5 mb-6">
         <div className="flex items-center gap-2 mb-4">
-          <BrainCircuit className="w-4 h-4 text-muted-foreground" />
-          <p className="text-sm font-semibold text-foreground">Spending Insights</p>
-          <span className="text-xs text-muted-foreground ml-auto">live</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+          <BrainCircuit className="w-4 h-4 text-primary" />
+          <p className="text-sm font-bold text-foreground tracking-tight">Spending Insights</p>
+          <span className="ml-auto flex items-center gap-1.5 text-[10px] font-bold text-success uppercase tracking-widest">
+            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
+            live
+          </span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {/* Today's spend */}

@@ -22,11 +22,14 @@ export function StatCard({ title, value, subtitle, icon, trend, className, delay
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay, ease: [0.23, 1, 0.32, 1] }}
       className={cn(
-        "glass-panel rounded-2xl p-6 relative overflow-hidden group hover:border-primary/30 transition-colors duration-300",
+        "glass-panel rounded-2xl p-6 relative overflow-hidden group stat-card-premium",
         className
       )}
     >
-      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-[40px] group-hover:bg-primary/10 transition-colors duration-500 -translate-y-1/2 translate-x-1/2" />
+      {/* Ambient orb — brightens on hover via group-hover */}
+      <div className="absolute top-0 right-0 w-36 h-36 bg-primary/6 rounded-full blur-[50px] group-hover:bg-primary/14 transition-all duration-500 -translate-y-1/3 translate-x-1/3" />
+      {/* Gradient sweep on hover */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-350 pointer-events-none rounded-2xl" />
       
       <div className="flex justify-between items-start mb-4 relative z-10">
         <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>

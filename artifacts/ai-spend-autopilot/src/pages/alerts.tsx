@@ -157,10 +157,8 @@ export default function Alerts() {
   return (
     <Shell>
       <header className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">Alert Rules</h1>
-        <p className="text-muted-foreground mt-2">
-          Configure proactive notifications to prevent budget overruns.
-        </p>
+        <h1 className="text-3xl md:text-5xl font-display font-black tracking-tight heading-gradient">Alert Rules</h1>
+        <p className="text-muted-foreground mt-2 text-sm">Configure proactive notifications to prevent budget overruns.</p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
@@ -176,10 +174,8 @@ export default function Alerts() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.1 }}
-                className={`glass-panel p-6 rounded-2xl flex items-center justify-between border transition-all duration-300 ${
-                  isActive
-                    ? "border-success/30 shadow-[0_0_20px_rgba(16,185,129,0.05)]"
-                    : "border-border/50"
+                className={`glass-panel p-6 rounded-2xl flex items-center justify-between border transition-all duration-300 stat-card-premium ${
+                  isActive ? "border-success/30 shadow-[0_0_24px_rgba(16,185,129,0.08)]" : "border-border/40"
                 }`}
               >
                 <div className="flex items-start gap-4">
@@ -224,7 +220,7 @@ export default function Alerts() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1 }}
-            className="glass-panel p-6 rounded-2xl border border-border/50"
+            className="glass-panel p-6 rounded-2xl border border-border/40 stat-card-premium"
           >
             <div className="flex items-center gap-2 mb-4">
               <Calendar className="w-4 h-4 text-primary" />
@@ -284,10 +280,10 @@ export default function Alerts() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
-            className={`glass-panel p-6 rounded-2xl border transition-colors duration-300 ${
+            className={`glass-panel p-6 rounded-2xl border transition-colors duration-300 stat-card-premium ${
               alertCheck?.exceeded
                 ? "border-destructive/40"
-                : "border-border/50"
+                : "border-border/40"
             }`}
           >
             <div className="flex items-center gap-2 mb-4">

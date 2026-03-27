@@ -101,7 +101,7 @@ function CostStatsRow({ totals, isLoading }: { totals?: { week_cost: number; mon
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {stats.map((s, i) => (
-        <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="glass-panel rounded-xl p-4">
+        <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="glass-panel rounded-xl p-4 stat-card-premium">
           <div className={`flex items-center gap-1.5 mb-2 ${s.color}`}>
             {s.icon}
             <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">{s.label}</span>
@@ -177,8 +177,8 @@ export default function Usage() {
   return (
     <Shell>
       <header className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-display font-bold">Usage &amp; Models</h1>
-        <p className="text-muted-foreground mt-2">Real-time API consumption, spend tracking, and model distribution.</p>
+        <h1 className="text-3xl md:text-5xl font-display font-black tracking-tight heading-gradient">Usage &amp; Models</h1>
+        <p className="text-muted-foreground mt-2 text-sm">Real-time API consumption, spend tracking, and model distribution.</p>
       </header>
 
       {/* ── Live cost stats (Supabase) ── */}
@@ -197,7 +197,7 @@ export default function Usage() {
 
       {/* ── Overview stats ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <div className="glass-panel p-6 rounded-2xl col-span-1 lg:col-span-2">
+        <div className="glass-panel p-6 rounded-2xl col-span-1 lg:col-span-2 stat-card-premium">
           <div className="flex items-center gap-2 text-muted-foreground mb-4">
             <Cpu className="w-5 h-5" />
             <h3 className="font-medium">Total API Requests</h3>
@@ -209,7 +209,7 @@ export default function Usage() {
             <span className="bg-success/10 px-2 py-0.5 rounded-full">+12.4%</span> vs last month
           </p>
         </div>
-        <div className="glass-panel p-6 rounded-2xl flex flex-col justify-center">
+        <div className="glass-panel p-6 rounded-2xl flex flex-col justify-center stat-card-premium">
           <div className="flex items-center gap-2 text-muted-foreground mb-4">
             <Clock className="w-5 h-5" />
             <h3 className="font-medium">Avg Latency</h3>

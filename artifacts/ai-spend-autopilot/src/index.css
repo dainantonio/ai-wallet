@@ -41,47 +41,47 @@
 :root {
   /* Enforce Dark Mode for the entire application as per requirements */
   color-scheme: dark;
-  
-  /* Very dark, sleek backdrop */
-  --background: 224 35% 4%;
-  --foreground: 210 40% 98%;
-  
-  /* Panels and cards are slightly elevated with minimal contrast */
-  --card: 224 30% 7%;
-  --card-foreground: 210 40% 98%;
-  
-  --popover: 224 30% 7%;
-  --popover-foreground: 210 40% 98%;
-  
-  /* Sharp, subtle borders */
-  --border: 220 20% 14%;
-  --input: 220 20% 14%;
-  
-  /* Primary electric indigo/blue */
-  --primary: 235 85% 65%;
+
+  /* Deep premium black — richer than before */
+  --background: 228 42% 3%;
+  --foreground: 210 40% 97%;
+
+  /* Cards elevated over the deep background */
+  --card: 226 38% 5.5%;
+  --card-foreground: 210 40% 97%;
+
+  --popover: 226 38% 5.5%;
+  --popover-foreground: 210 40% 97%;
+
+  /* Crisp subtle borders */
+  --border: 222 22% 13%;
+  --input: 222 22% 13%;
+
+  /* Electric violet-indigo primary */
+  --primary: 243 82% 63%;
   --primary-foreground: 0 0% 100%;
-  
-  /* Secondary sleek gray */
-  --secondary: 220 20% 12%;
-  --secondary-foreground: 210 40% 98%;
-  
+
+  /* Rich dark secondary */
+  --secondary: 222 24% 10%;
+  --secondary-foreground: 210 40% 97%;
+
   /* Muted elements */
-  --muted: 220 20% 12%;
-  --muted-foreground: 215 20% 65%;
-  
+  --muted: 222 24% 10%;
+  --muted-foreground: 215 22% 62%;
+
   /* Accents */
-  --accent: 235 85% 65%;
-  --accent-foreground: 210 40% 98%;
-  
+  --accent: 243 82% 63%;
+  --accent-foreground: 210 40% 97%;
+
   /* Status Colors */
-  --destructive: 350 85% 60%;
+  --destructive: 350 88% 58%;
   --destructive-foreground: 0 0% 100%;
-  
-  /* Neon emerald for active/saving states */
-  --success: 150 85% 45%;
+
+  /* Bright neon emerald */
+  --success: 152 90% 42%;
   --success-foreground: 0 0% 100%;
-  
-  --ring: 235 85% 65%;
+
+  --ring: 243 82% 63%;
   --radius: 1rem;
 }
 
@@ -115,30 +115,73 @@
 }
 
 @layer utilities {
+  /* Richer glassmorphism — deeper blur, crisper border, more depth */
   .glass-panel {
-    @apply bg-card/70 backdrop-blur-2xl border border-white/6 shadow-[0_4px_32px_-4px_rgba(0,0,0,0.5)];
+    background: rgba(10, 10, 24, 0.72);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow: 0 8px 40px -8px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04) inset;
   }
 
   /* Elevated fintech stat card */
   .fintech-card {
-    @apply bg-card/90 backdrop-blur-xl border border-white/5;
-    box-shadow: 0 2px 12px -2px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03) inset;
+    background: rgba(12, 11, 26, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 2px 16px -4px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03) inset;
+  }
+
+  /* Premium stat card — animates gradient in on hover */
+  .stat-card-premium {
+    position: relative;
+    transition: box-shadow 0.28s ease, border-color 0.28s ease, transform 0.22s ease;
+  }
+  .stat-card-premium::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.08) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+  .stat-card-premium:hover::before { opacity: 1; }
+  .stat-card-premium:hover {
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.22), 0 12px 32px -8px hsl(var(--primary) / 0.14);
+    border-color: hsl(var(--primary) / 0.22) !important;
+    transform: translateY(-2px);
+  }
+
+  /* Dot grid background pattern */
+  .dot-grid {
+    background-image: radial-gradient(circle, rgba(148,163,184,0.055) 1px, transparent 1px);
+    background-size: 26px 26px;
   }
 
   .neon-glow {
-    box-shadow: 0 0 40px -10px hsl(var(--primary) / 0.4);
+    box-shadow: 0 0 40px -10px hsl(var(--primary) / 0.45);
   }
 
   .success-glow {
-    box-shadow: 0 0 30px -10px hsl(var(--success) / 0.3);
+    box-shadow: 0 0 30px -10px hsl(var(--success) / 0.35);
   }
 
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-white/60;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-white via-white/95 to-white/55;
   }
 
   .text-gradient-primary {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-indigo-400;
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #a78bfa 0%, #818cf8 40%, #60a5fa 100%);
+  }
+
+  /* Premium heading gradient — navy → violet → indigo */
+  .heading-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #e0e7ff 0%, #c4b5fd 35%, #818cf8 70%, #6366f1 100%);
   }
 
   /* Transaction row: subtle hover, no layout shift */
@@ -146,7 +189,14 @@
     @apply relative flex items-center gap-3 px-4 py-3.5 rounded-xl transition-colors duration-150 cursor-default select-none;
   }
   .tx-row:hover {
-    background: rgba(255, 255, 255, 0.025);
+    background: rgba(255, 255, 255, 0.028);
+  }
+
+  /* Sidebar gradient active pill */
+  .nav-active-pill {
+    background: linear-gradient(135deg, rgba(99,102,241,0.22) 0%, rgba(139,92,246,0.12) 100%);
+    border: 1px solid rgba(99,102,241,0.28);
+    box-shadow: 0 0 16px -6px rgba(99,102,241,0.3);
   }
 }
 
@@ -157,4 +207,13 @@
 }
 .card-shine-inner {
   animation: card-shine 8s ease-in-out infinite;
+}
+
+/* Subtle gradient pulse on active buttons */
+@keyframes btn-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
+  50%       { box-shadow: 0 0 18px -4px currentColor; }
+}
+.btn-pulse-active:active {
+  animation: btn-glow-pulse 0.4s ease-out forwards;
 }

@@ -23,15 +23,15 @@ export default function Autopilot() {
   return (
     <Shell>
       <header className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">Autopilot Configuration</h1>
-        <p className="text-muted-foreground mt-2">Manage autonomous routing and caching to minimize spend.</p>
+        <h1 className="text-3xl md:text-5xl font-display font-black tracking-tight heading-gradient">Autopilot Configuration</h1>
+        <p className="text-muted-foreground mt-2 text-sm">Manage autonomous routing and caching to minimize spend.</p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
         {/* Engine Settings */}
         <div className="space-y-6">
-          <div className="glass-panel p-6 rounded-2xl border-l-4 border-l-primary relative overflow-hidden">
+          <div className="glass-panel p-6 rounded-2xl border-l-[3px] border-l-primary relative overflow-hidden stat-card-premium" style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.05) inset, 0 8px 40px -8px rgba(0,0,0,0.6), -4px 0 20px -8px rgba(99,102,241,0.3)" }}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-[40px] -translate-y-1/2 translate-x-1/2" />
             
             <div className="flex justify-between items-start mb-4 relative z-10">
@@ -51,7 +51,7 @@ export default function Autopilot() {
             </p>
           </div>
 
-          <div className="glass-panel p-6 rounded-2xl border-l-4 border-l-accent relative overflow-hidden">
+          <div className="glass-panel p-6 rounded-2xl border-l-[3px] border-l-accent relative overflow-hidden stat-card-premium" style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.05) inset, 0 8px 40px -8px rgba(0,0,0,0.6), -4px 0 20px -8px rgba(139,92,246,0.25)" }}>
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-accent/20 rounded-lg">

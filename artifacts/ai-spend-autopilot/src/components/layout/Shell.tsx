@@ -28,42 +28,64 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {/* Background Effects */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/10 rounded-full blur-[120px] mix-blend-screen opacity-50 translate-x-1/3 -translate-y-1/3" />
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-success/5 rounded-full blur-[100px] mix-blend-screen opacity-50 -translate-x-1/3 translate-y-1/3" />
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay" />
+        {/* Dot grid texture */}
+        <div className="absolute inset-0 dot-grid opacity-100" />
+        {/* Ambient color orbs */}
+        <div className="absolute top-0 right-0 w-[700px] h-[700px] rounded-full blur-[140px] opacity-40 translate-x-1/3 -translate-y-1/4"
+          style={{ background: "radial-gradient(circle, rgba(99,102,241,0.18) 0%, rgba(139,92,246,0.10) 50%, transparent 70%)" }} />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full blur-[110px] opacity-30 -translate-x-1/3 translate-y-1/3"
+          style={{ background: "radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)" }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full blur-[120px] opacity-15"
+          style={{ background: "radial-gradient(circle, rgba(139,92,246,0.20) 0%, transparent 70%)" }} />
       </div>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-72 flex-col border-r border-border/40 glass-panel z-20 relative">
+      <aside className="hidden md:flex w-72 flex-col border-r border-white/[0.06] z-20 relative"
+        style={{ background: "rgba(7,7,18,0.82)", backdropFilter: "blur(32px) saturate(160%)" }}>
         {/* Brand */}
         <div className="p-6 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-indigo-600 flex items-center justify-center shadow-lg shadow-primary/20">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-primary/30 relative"
+            style={{ background: "linear-gradient(135deg, #6366f1 0%, #4338ca 100%)" }}>
             <Wallet className="w-5 h-5 text-white" />
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/20 to-transparent" />
           </div>
           <div>
-            <h1 className="font-display font-bold text-lg leading-tight text-gradient">AI Wallet</h1>
-            <p className="text-xs font-medium text-success tracking-wide uppercase">Smart Spend Active</p>
+            <h1 className="font-display font-bold text-lg leading-tight heading-gradient">AI Wallet</h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
+              <p className="text-[10px] font-semibold text-success tracking-widest uppercase">Smart Spend Active</p>
+            </div>
           </div>
         </div>
 
+        {/* Gradient divider under brand */}
+        <div className="mx-5 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-2" />
+
         {/* Nav */}
-        <nav className="flex-1 px-4 py-6 space-y-2">
+        <nav className="flex-1 px-3 py-4 space-y-1">
           {NAV_ITEMS.map((item) => {
             const isActive = location === item.path;
             const Icon = item.icon;
             return (
               <Link key={item.path} href={item.path} className="block">
                 <div className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 relative group overflow-hidden",
-                  isActive ? "text-white font-semibold" : "text-muted-foreground hover:text-white hover:bg-white/5"
+                  "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-250 relative group overflow-hidden",
+                  isActive ? "text-white font-semibold" : "text-muted-foreground hover:text-white/90 hover:bg-white/[0.04]"
                 )}>
                   {isActive && (
                     <motion.div layoutId="sidebar-active"
-                      className="absolute inset-0 bg-primary/15 border border-primary/30 rounded-xl -z-10"
+                      className="nav-active-pill absolute inset-0 rounded-xl -z-10"
                       initial={false} transition={{ type: "spring", stiffness: 400, damping: 30 }} />
                   )}
-                  <Icon className={cn("w-5 h-5 transition-transform duration-300 group-hover:scale-110", isActive ? "text-primary" : "")} />
-                  <span>{item.label}</span>
+                  {/* Left accent bar on active */}
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-gradient-to-b from-primary to-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+                  )}
+                  <Icon className={cn(
+                    "w-4.5 h-4.5 transition-all duration-250 flex-shrink-0",
+                    isActive ? "text-primary drop-shadow-[0_0_6px_rgba(99,102,241,0.7)]" : "group-hover:scale-110"
+                  )} style={{ width: "1.125rem", height: "1.125rem" }} />
+                  <span className="text-sm">{item.label}</span>
                 </div>
               </Link>
             );
@@ -73,7 +95,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {/* User panel */}
         <div className="p-4 mt-auto space-y-3">
           {/* System status */}
-          <div className="px-4 py-3 rounded-xl bg-card border border-border/50">
+          <div className="px-4 py-3 rounded-xl border" style={{ background: "rgba(12,12,28,0.7)", borderColor: "rgba(255,255,255,0.06)" }}>
             <div className="flex items-center gap-3 mb-1">
               <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
               <span className="text-sm font-medium text-foreground">System Status</span>
