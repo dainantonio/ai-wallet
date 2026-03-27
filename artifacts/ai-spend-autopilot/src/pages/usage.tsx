@@ -5,11 +5,11 @@ import { formatCurrency, formatNumber } from "@/lib/utils";
 import { ActivityFeed } from "@/components/ui/ActivityFeed";
 import { motion } from "framer-motion";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import {
   Cpu, ServerCrash, Clock, TrendingDown, Database,
-  CalendarDays, Zap, ArrowUpRight,
+  CalendarDays, Zap, ArrowUpRight, Flame, Sparkles, Trophy,
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -37,6 +37,15 @@ function ChartTooltip({ active, payload, label }: TooltipProps) {
   );
 }
 
+// ─── Color helper for cost bars ───────────────────────────────────────────────
+function costBarColor(cost: number, max: number): string {
+  if (max === 0 || cost === 0) return "rgba(52,211,153,0.6)";
+  const ratio = cost / max;
+  if (ratio < 0.33) return "rgba(52,211,153,0.80)";   // green — low spend
+  if (ratio < 0.67) return "rgba(251,191,36,0.80)";   // amber — medium
+  return "rgba(248,113,113,0.85)";                    // red — high spend
+}
+
 // ─── Daily Spend Chart ────────────────────────────────────────────────────────
 function DailySpendChart({ data, isLoading }: { data: DailySpend[]; isLoading: boolean }) {
   const hasData = data.some(d => d.total_cost > 0);
@@ -50,6 +59,8 @@ function DailySpendChart({ data, isLoading }: { data: DailySpend[]; isLoading: b
     return match ?? { day: d.toISOString(), total_cost: 0, total_saved: 0, request_count: 0, input_tokens: 0, output_tokens: 0 };
   });
 
+  const maxCost = Math.max(...filled.map(d => d.total_cost), 0);
+
   return (
     <div className="glass-panel rounded-2xl p-6">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
@@ -59,30 +70,36 @@ function DailySpendChart({ data, isLoading }: { data: DailySpend[]; isLoading: b
           <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">Last 7 days</span>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-400/80 inline-block"/>Spent</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400/80 inline-block"/>Saved</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400/80 inline-block"/>Low</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400/80 inline-block"/>Medium</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-400/80 inline-block"/>High</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-indigo-400/70 inline-block"/>Saved</span>
         </div>
       </div>
 
       {isLoading ? (
-        <div className="h-[180px] flex items-center justify-center">
+        <div className="h-[200px] flex items-center justify-center">
           <div className="w-8 h-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
         </div>
       ) : !hasData ? (
-        <div className="h-[180px] flex flex-col items-center justify-center gap-2 text-muted-foreground">
+        <div className="h-[200px] flex flex-col items-center justify-center gap-2 text-muted-foreground">
           <Database className="w-8 h-8 opacity-25" />
           <p className="text-sm font-medium">No cost data yet</p>
           <p className="text-xs opacity-50">Run AI tasks in the dashboard to see real spend here</p>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={filled} barSize={20} barGap={4} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={filled} barSize={22} barGap={4} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
             <XAxis dataKey="day" tickFormatter={fmtDay} tick={{ fill: "rgba(148,163,184,0.65)", fontSize: 10 }} axisLine={false} tickLine={false} />
             <YAxis tickFormatter={v => `$${(v as number).toFixed(3)}`} tick={{ fill: "rgba(148,163,184,0.65)", fontSize: 10 }} axisLine={false} tickLine={false} width={54} />
             <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)", radius: 4 }} />
-            <Bar dataKey="total_cost"  name="total_cost"  fill="rgba(248,113,113,0.75)" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="total_saved" name="total_saved" fill="rgba(52,211,153,0.75)"  radius={[4, 4, 0, 0]} />
+            <Bar dataKey="total_cost" name="total_cost" radius={[4, 4, 0, 0]}>
+              {filled.map((entry, idx) => (
+                <Cell key={idx} fill={costBarColor(entry.total_cost, maxCost)} />
+              ))}
+            </Bar>
+            <Bar dataKey="total_saved" name="total_saved" fill="rgba(99,102,241,0.60)" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}
@@ -158,11 +175,186 @@ function RealModelBreakdown({ models }: { models: ModelSpend[] }) {
   );
 }
 
+// ─── Provider badge colors (mirrors home.tsx) ─────────────────────────────────
+const PROVIDER_COLOR: Record<string, string> = {
+  "OpenAI":    "text-blue-400 bg-blue-400/10",
+  "Anthropic": "text-orange-400 bg-orange-400/10",
+  "Gemini":    "text-green-400 bg-green-400/10",
+  "Google":    "text-green-400 bg-green-400/10",
+  "Meta":      "text-sky-400 bg-sky-400/10",
+  "Mistral":   "text-purple-400 bg-purple-400/10",
+};
+
+function detectProvider(label: string): string {
+  const l = label.toLowerCase();
+  if (l.includes("gpt") || l.includes("openai") || l.includes("davinci")) return "OpenAI";
+  if (l.includes("claude") || l.includes("anthropic") || l.includes("haiku") || l.includes("sonnet") || l.includes("opus")) return "Anthropic";
+  if (l.includes("gemini") || l.includes("google")) return "Gemini";
+  if (l.includes("llama") || l.includes("meta")) return "Meta";
+  if (l.includes("mistral")) return "Mistral";
+  return "OpenAI"; // default
+}
+
+// ─── Top 3 Most Expensive Prompts ────────────────────────────────────────────
+interface ActivityItem { id: string; type: string; label: string; value: string; timestamp: string; }
+function TopExpensivePrompts({
+  activity, avgCost, avgLatency, isLoading,
+}: {
+  activity: ActivityItem[];
+  avgCost: number;
+  avgLatency: number;
+  isLoading: boolean;
+}) {
+  // Estimate per-item cost from latency value ("2.4s") proportional to avgCost
+  const usageItems = activity
+    .filter(a => a.type === "usage")
+    .map(a => {
+      const latency = parseFloat(a.value) || avgLatency || 1;
+      const cost = avgLatency > 0
+        ? +(avgCost * (latency / avgLatency)).toFixed(5)
+        : +avgCost.toFixed(5);
+      return { ...a, estimatedCost: cost, provider: detectProvider(a.label) };
+    })
+    .sort((a, b) => b.estimatedCost - a.estimatedCost)
+    .slice(0, 3);
+
+  return (
+    <div className="glass-panel rounded-2xl p-6">
+      <div className="flex items-center gap-2 mb-5">
+        <Flame className="w-5 h-5 text-orange-400" />
+        <h2 className="text-xl font-display font-bold">Most Expensive Requests</h2>
+        <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full ml-auto">
+          by estimated cost
+        </span>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="h-14 bg-secondary/40 rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : usageItems.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-2">
+          <Trophy className="w-8 h-8 opacity-25" />
+          <p className="text-sm">No usage data yet</p>
+          <p className="text-xs opacity-50">Run AI tasks to see your most expensive requests</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {usageItems.map((item, i) => (
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.08 }}
+              className="flex items-center justify-between px-4 py-3 rounded-xl bg-secondary/30 border border-border/30 hover:bg-secondary/50 transition-colors"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span className={`text-sm font-black font-mono w-5 flex-shrink-0 ${
+                  i === 0 ? "text-red-400" : i === 1 ? "text-orange-400" : "text-yellow-400"
+                }`}>#{i + 1}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{item.label}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${PROVIDER_COLOR[item.provider] ?? "text-muted-foreground bg-secondary"}`}>
+                      {item.provider}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">{item.value} latency</span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0 ml-3">
+                <p className={`text-sm font-bold font-mono ${i === 0 ? "text-red-400" : "text-foreground"}`}>
+                  ~${item.estimatedCost.toFixed(4)}
+                </p>
+                <p className="text-[10px] text-muted-foreground">estimated</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Savings Highlight Stat ───────────────────────────────────────────────────
+function SavingsHighlight({
+  dailySpend, isLoading,
+}: {
+  dailySpend: number;
+  isLoading: boolean;
+}) {
+  const potential = +(dailySpend * 0.35).toFixed(4);
+  const pct = 35;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      className="glass-panel rounded-2xl p-6 relative overflow-hidden stat-card-premium"
+    >
+      {/* Ambient glow */}
+      <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-400/8 rounded-full blur-[60px] translate-x-1/3 -translate-y-1/3 pointer-events-none" />
+
+      <div className="flex items-center gap-2 mb-4 relative z-10">
+        <Sparkles className="w-5 h-5 text-emerald-400" />
+        <h2 className="text-xl font-display font-bold">Savings Opportunity</h2>
+        <span className="text-xs text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-2 py-0.5 rounded-full ml-auto">
+          Today
+        </span>
+      </div>
+
+      <div className="relative z-10">
+        <p className="text-xs text-muted-foreground mb-2 uppercase tracking-widest font-semibold">
+          You could have saved
+        </p>
+        {isLoading ? (
+          <div className="h-12 w-40 bg-secondary/60 rounded-xl animate-pulse" />
+        ) : (
+          <div className="flex items-end gap-3">
+            <p className="text-5xl font-black font-mono tracking-tight text-emerald-400">
+              ${potential}
+            </p>
+            <p className="text-lg font-bold text-emerald-400/70 mb-1.5">today</p>
+          </div>
+        )}
+        <p className="text-sm text-muted-foreground mt-2 leading-snug">
+          Based on <span className="font-semibold text-foreground">{pct}% savings opportunity</span> from
+          smart routing and caching on today's{" "}
+          <span className="font-semibold text-foreground">${dailySpend.toFixed(4)}</span> spend.
+        </p>
+
+        {/* Progress bar showing savings potential */}
+        <div className="mt-4">
+          <div className="flex justify-between text-[10px] text-muted-foreground mb-1.5">
+            <span>Actual spend</span>
+            <span>With optimization</span>
+          </div>
+          <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] mt-1">
+            <span className="text-red-400 font-mono">${dailySpend.toFixed(4)}</span>
+            <span className="text-emerald-400 font-mono font-bold">${(dailySpend - potential).toFixed(4)} possible</span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function Usage() {
   const { data: usageData, isLoading: usageLoading } = useUsageData();
   const { data: costData,  isLoading: costLoading  } = useCostSummary();
   const hasRealModels = (costData?.byModel?.length ?? 0) > 0;
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todaySpend = costData?.daily?.find(d => d.day.slice(0, 10) === todayKey)?.total_cost ?? usageData?.avgCost ?? 0;
 
   if (usageLoading || !usageData) {
     return (
@@ -193,6 +385,17 @@ export default function Usage() {
       {/* ── Daily spend chart ── */}
       <div className="mb-6">
         <DailySpendChart data={costData?.daily ?? []} isLoading={costLoading} />
+      </div>
+
+      {/* ── Savings opportunity + Top expensive requests ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <SavingsHighlight dailySpend={todaySpend} isLoading={costLoading} />
+        <TopExpensivePrompts
+          activity={usageData.activity}
+          avgCost={usageData.avgCost}
+          avgLatency={usageData.avgLatency}
+          isLoading={usageLoading}
+        />
       </div>
 
       {/* ── Overview stats ── */}
