@@ -227,6 +227,139 @@ function AnimatedBar({ pct, color }: { pct: number; color: string }) {
   );
 }
 
+// ─── Efficiency Score ─────────────────────────────────────────────────────────
+function calcEfficiencyScore(
+  avgCost: number,
+  savingsPct: number,
+  topProvider: string,
+  optimizedFraction: number,
+): number {
+  let score = 100;
+  if (avgCost > 0.05)           score -= 10;
+  if (savingsPct < 20)          score -= 15;
+  if (topProvider === "OpenAI") score -= 10;
+  if (optimizedFraction > 0.30) score += 10;
+  return Math.min(100, Math.max(0, score));
+}
+
+function scoreColor(score: number) {
+  if (score >= 80) return { stroke: "#34d399", text: "text-emerald-400", badge: "bg-emerald-400/15 text-emerald-400", label: "Excellent" };
+  if (score >= 50) return { stroke: "#fbbf24", text: "text-amber-400",   badge: "bg-amber-400/15 text-amber-400",   label: "Moderate"  };
+  return              { stroke: "#f87171", text: "text-red-400",     badge: "bg-red-400/15 text-red-400",       label: "Needs Work" };
+}
+
+function scoreSuggestions(
+  avgCost: number,
+  savingsPct: number,
+  topProvider: string,
+  optimizedFraction: number,
+): string[] {
+  const tips: string[] = [];
+  if (avgCost > 0.05)            tips.push("Switch to lighter models — avg cost is above $0.05/request.");
+  if (savingsPct < 20)           tips.push("Enable Smart Routing to push your savings rate above 20%.");
+  if (topProvider === "OpenAI")  tips.push("Route GPT-4o calls to Gemini Flash — same quality, 30% cheaper.");
+  if (optimizedFraction <= 0.30) tips.push("Use Optimize Spend more often to boost your optimized ratio.");
+  const fallbacks = [
+    "Set Saver Mode to maximize smart routing savings.",
+    "Use Cost Preview to compare providers before running tasks.",
+    "Add a monthly budget limit to prevent overruns.",
+  ];
+  for (const f of fallbacks) {
+    if (tips.length >= 3) break;
+    tips.push(f);
+  }
+  return tips.slice(0, 3);
+}
+
+function EfficiencyScoreCard({
+  avgCost, savingsPct, topProvider, optimizedFraction,
+}: {
+  avgCost: number;
+  savingsPct: number;
+  topProvider: string;
+  optimizedFraction: number;
+}) {
+  const score       = calcEfficiencyScore(avgCost, savingsPct, topProvider, optimizedFraction);
+  const { stroke, text, badge, label } = scoreColor(score);
+  const suggestions = scoreSuggestions(avgCost, savingsPct, topProvider, optimizedFraction);
+
+  const r    = 38;
+  const circ = 2 * Math.PI * r;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.45, ease: [0.23, 1, 0.32, 1] }}
+      className="glass-panel rounded-2xl p-5 relative overflow-hidden group stat-card-premium"
+    >
+      {/* Ambient orb */}
+      <div
+        className="absolute top-0 right-0 w-36 h-36 rounded-full blur-[50px] -translate-y-1/3 translate-x-1/3 group-hover:opacity-80 transition-opacity duration-500 pointer-events-none opacity-60"
+        style={{ background: stroke + "28" }}
+      />
+      {/* Hover gradient sweep */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-350 pointer-events-none rounded-2xl" />
+
+      <h3 className="text-sm font-medium text-muted-foreground mb-4 relative z-10">Efficiency Score</h3>
+
+      {/* Ring + score */}
+      <div className="flex items-center gap-4 mb-4 relative z-10">
+        <div className="relative flex-shrink-0 w-[88px] h-[88px]">
+          <svg width="88" height="88" viewBox="0 0 88 88" className="-rotate-90">
+            {/* Track */}
+            <circle cx="44" cy="44" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
+            {/* Filled arc */}
+            <motion.circle
+              cx="44" cy="44" r={r}
+              fill="none"
+              stroke={stroke}
+              strokeWidth="8"
+              strokeLinecap="round"
+              strokeDasharray={String(circ)}
+              initial={{ strokeDashoffset: circ }}
+              animate={{ strokeDashoffset: circ - (score / 100) * circ }}
+              transition={{ duration: 1.2, ease: "easeOut", delay: 0.5 }}
+            />
+          </svg>
+          {/* Score number overlay */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className={`text-xl font-black font-mono leading-none ${text}`}>
+              <AnimatedNumber value={score} decimals={0} />
+            </span>
+            <span className="text-[9px] text-muted-foreground/60 font-semibold uppercase tracking-wide mt-0.5">/ 100</span>
+          </div>
+        </div>
+
+        <div className="min-w-0">
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${badge}`}>{label}</span>
+          <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
+            Based on cost, savings rate &amp; provider mix
+          </p>
+        </div>
+      </div>
+
+      {/* Suggestions */}
+      <div className="relative z-10">
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+          Improve your score by…
+        </p>
+        <div className="space-y-1.5">
+          {suggestions.map((s, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <div
+                className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0"
+                style={{ background: stroke }}
+              />
+              <p className="text-xs text-muted-foreground leading-snug">{s}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 const categoryIcon = (cat: string) => {
   if (cat === "routing")     return <ArrowRightLeft className="w-4 h-4" />;
   if (cat === "caching")     return <Database className="w-4 h-4" />;
@@ -1081,6 +1214,12 @@ function HomeInner({ data }: { data: UsageData }) {
   const projSavePct = +((projSavings / origTotal) * 100).toFixed(1);
   const isSimulated = spendMode !== "performance";
 
+  // ── Efficiency score inputs ──────────────────────────────────────────────
+  const scoreTxs = transactions.filter(tx => tx.type === "usage" || tx.type === "optimization");
+  const optimizedFraction = scoreTxs.length > 0
+    ? transactions.filter(tx => tx.type === "optimization").length / scoreTxs.length
+    : 0;
+
   const usedPct = Math.min((balance / budget) * 100, 100);
   const budgetStatus =
     usedPct >= 90 ? { label: "You've hit your limit",      icon: <XCircle className="w-4 h-4" />,      color: "text-red-400",    barColor: "bg-red-400",    bg: "bg-red-400/8 border-red-400/25" }
@@ -1434,7 +1573,7 @@ function HomeInner({ data }: { data: UsageData }) {
       </motion.div>
 
       {/* ── Stats Grid ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard delay={0.2} title="Available Credits"
           value={`$${(data.credits + (isSimulated ? extraSaved : 0)).toFixed(1)}`}
           icon={<Wallet className="w-4 h-4" />} className="stat-card-premium" />
@@ -1444,6 +1583,12 @@ function HomeInner({ data }: { data: UsageData }) {
           className="stat-card-premium" />
         <StatCard delay={0.4} title="Top Tool" value={data.topTool}
           icon={<BrainCircuit className="w-4 h-4" />} className="stat-card-premium whitespace-nowrap overflow-hidden text-ellipsis" />
+        <EfficiencyScoreCard
+          avgCost={insights.avgCost > 0 ? insights.avgCost : data.avgCost}
+          savingsPct={data.savingsPercent}
+          topProvider={insights.topProvider}
+          optimizedFraction={optimizedFraction}
+        />
       </div>
 
       {/* ── Spending Insights ── */}
