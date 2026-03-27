@@ -81,6 +81,33 @@ const TIER_LABEL: Record<string, string> = {
 
 const USAGE_PROVIDERS = ["OpenAI", "Anthropic", "Gemini"];
 
+// ─── Client-side cost rates (mirrors wallet.ts PROVIDER_META) ─────────────────
+const PROMPT_COST_RATES = [
+  { provider: "OpenAI",    model: "GPT-4o",            inRate: 0.000050,  outRate: 0.000150  },
+  { provider: "Anthropic", model: "Claude 3.5 Sonnet", inRate: 0.000075,  outRate: 0.000240  },
+  { provider: "Gemini",    model: "Gemini 1.5 Pro",    inRate: 0.0000125, outRate: 0.0000375 },
+];
+
+function fmtCost(cost: number): string {
+  if (cost === 0) return "$0.00";
+  if (cost < 0.0001) return `$${cost.toFixed(7)}`;
+  if (cost < 0.01)   return `$${cost.toFixed(5)}`;
+  return `$${cost.toFixed(4)}`;
+}
+
+function estimatePromptCosts(text: string) {
+  const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+  if (words === 0) return null;
+  const inputTokens  = Math.round(words * 1.3);
+  const outputTokens = Math.round(inputTokens * 0.5);
+  return PROMPT_COST_RATES.map(r => ({
+    provider: r.provider,
+    model:    r.model,
+    cost: +(inputTokens * r.inRate + outputTokens * r.outRate).toFixed(7),
+    inputTokens,
+  })).sort((a, b) => a.cost - b.cost);
+}
+
 // ─── Provider badge colors ────────────────────────────────────────────────────
 const PROVIDER_COLOR: Record<string, string> = {
   "OpenAI":    "text-blue-400 bg-blue-400/10",
@@ -255,6 +282,133 @@ function ActionBtn({ icon, label, desc, loading, accent, border, bg, iconBg, onC
         <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 leading-tight">{loading ? "Working…" : desc}</p>
       </div>
     </motion.button>
+  );
+}
+
+// ─── Cost Preview Panel ───────────────────────────────────────────────────────
+function CostPreviewPanel({ avgCost }: { avgCost: number }) {
+  const [text, setText]         = useState("");
+  const [debounced, setDebounced] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(text), 300);
+    return () => clearTimeout(t);
+  }, [text]);
+
+  const estimates = useMemo(() => estimatePromptCosts(debounced), [debounced]);
+  const cheapest     = estimates?.[0];
+  const priciest     = estimates?.[estimates.length - 1];
+  const openAiEst    = estimates?.find(e => e.provider === "OpenAI");
+  const aboveAvg     = avgCost > 0 && openAiEst != null && openAiEst.cost > avgCost;
+  const hasSavings   = cheapest && priciest && cheapest.provider !== priciest.provider;
+  const savings      = hasSavings ? priciest!.cost - cheapest!.cost : 0;
+  const savingsPct   = hasSavings ? Math.round((savings / priciest!.cost) * 100) : 0;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.19 }}
+      className="glass-panel rounded-2xl p-5 mb-6">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <MessageSquare className="w-4 h-4 text-primary" />
+        <p className="text-sm font-bold text-foreground tracking-tight">Live Cost Preview</p>
+        <span className="ml-auto text-[10px] font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
+          client-side · no API calls
+        </span>
+      </div>
+
+      {/* Textarea */}
+      <textarea
+        value={text}
+        onChange={e => setText(e.target.value)}
+        placeholder="Type or paste a prompt to estimate cost across providers…"
+        rows={3}
+        className="w-full bg-secondary/40 border border-border/50 rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 resize-none transition-all duration-200"
+      />
+
+      {/* Results */}
+      <AnimatePresence>
+        {estimates ? (
+          <motion.div
+            key="results"
+            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            <div className="mt-4 space-y-2">
+              {/* Token count */}
+              <p className="text-[10px] text-muted-foreground/60 font-medium tracking-wide">
+                ~{estimates[0].inputTokens} input tokens · ~{Math.round(estimates[0].inputTokens * 0.5)} estimated output tokens
+              </p>
+
+              {/* Provider rows — sorted cheapest first */}
+              {estimates.map((e, i) => {
+                const isCheapest = i === 0;
+                return (
+                  <div key={e.provider}
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border transition-colors ${
+                      isCheapest
+                        ? "bg-emerald-400/8 border-emerald-400/25"
+                        : "bg-secondary/30 border-border/30"
+                    }`}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${PROVIDER_COLOR[e.provider] ?? "text-muted-foreground bg-secondary"}`}>
+                        {e.provider}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{e.model}</span>
+                      {isCheapest && (
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-1.5 py-0.5 rounded-full">
+                          cheapest
+                        </span>
+                      )}
+                    </div>
+                    <span className={`text-sm font-bold font-mono tabular-nums ${isCheapest ? "text-emerald-400" : "text-muted-foreground"}`}>
+                      {fmtCost(e.cost)}
+                    </span>
+                  </div>
+                );
+              })}
+
+              {/* Cheaper-alternative suggestion */}
+              {hasSavings && (
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                  className="flex items-start gap-2.5 p-3.5 rounded-xl bg-amber-400/6 border border-amber-400/20">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-foreground leading-snug">
+                    This prompt may cost{" "}
+                    <span className="font-bold font-mono text-foreground">{fmtCost(priciest!.cost)}</span>
+                    {" "}on <span className="font-semibold">{priciest!.provider}</span>
+                    {" "}— switching to{" "}
+                    <span className="font-semibold text-emerald-400">{cheapest!.model}</span>
+                    {" "}saves{" "}
+                    <span className="font-bold text-emerald-400 font-mono">~{fmtCost(savings)}</span>
+                    {" "}
+                    <span className="text-emerald-400/80">({savingsPct}% cheaper)</span>
+                  </p>
+                </motion.div>
+              )}
+
+              {/* Above-average cost warning */}
+              {aboveAvg && (
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                  className="flex items-start gap-2.5 p-3.5 rounded-xl bg-orange-400/6 border border-orange-400/20">
+                  <AlertTriangle className="w-3.5 h-3.5 text-orange-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-foreground leading-snug">
+                    This prompt is above your average request cost of{" "}
+                    <span className="font-bold font-mono text-orange-400">{fmtCost(avgCost)}</span>
+                    {" "}— consider simplifying or routing to a lighter model.
+                  </p>
+                </motion.div>
+              )}
+            </div>
+          </motion.div>
+        ) : (
+          <motion.p key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="text-[11px] text-muted-foreground/40 mt-3 text-center">
+            Start typing to see live cost estimates across providers
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
@@ -1046,6 +1200,9 @@ function HomeInner({ data }: { data: UsageData }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Live Cost Preview ── */}
+      <CostPreviewPanel avgCost={data.avgCost} />
 
       {/* ── Spend Mode Selector ── */}
       <motion.div
