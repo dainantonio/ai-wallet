@@ -11,7 +11,7 @@ import {
   MessageSquare, Image, Bot, Target, CheckCircle2,
   TriangleAlert, XCircle, Gauge, Leaf, Flame,
   CreditCard, Receipt, ArrowDownRight, ArrowUpRight,
-  Play, Plus, RefreshCw, X, ShieldCheck, FlaskConical,
+  Play, Plus, RefreshCw, X, ShieldCheck, FlaskConical, Copy,
 } from "lucide-react";
 import { motion, AnimatePresence, animate as motionAnimate } from "framer-motion";
 import type { UsageData } from "@workspace/api-client-react/src/generated/api.schemas";
@@ -286,23 +286,102 @@ function ActionBtn({ icon, label, desc, loading, accent, border, bg, iconBg, onC
 }
 
 // ─── Cost Preview Panel ───────────────────────────────────────────────────────
-function CostPreviewPanel({ avgCost }: { avgCost: number }) {
-  const [text, setText]         = useState("");
-  const [debounced, setDebounced] = useState("");
+interface OptimizeResult {
+  optimizedText:      string;
+  actualCost:         number;
+  actualInputTokens:  number;
+  actualOutputTokens: number;
+}
 
+function CostPreviewPanel({ avgCost }: { avgCost: number }) {
+  const [text, setText]             = useState("");
+  const [debounced, setDebounced]   = useState("");
+  const [optimizing, setOptimizing] = useState(false);
+  const [optimizeResult, setOptimizeResult] = useState<OptimizeResult | null>(null);
+  const [optimizeError, setOptimizeError]   = useState<string | null>(null);
+  const [copied, setCopied]         = useState(false);
+
+  // Debounce for live estimates
   useEffect(() => {
     const t = setTimeout(() => setDebounced(text), 300);
     return () => clearTimeout(t);
   }, [text]);
 
+  // Clear optimization result when the user edits the prompt
+  useEffect(() => {
+    setOptimizeResult(null);
+    setOptimizeError(null);
+  }, [text]);
+
   const estimates = useMemo(() => estimatePromptCosts(debounced), [debounced]);
-  const cheapest     = estimates?.[0];
-  const priciest     = estimates?.[estimates.length - 1];
-  const openAiEst    = estimates?.find(e => e.provider === "OpenAI");
-  const aboveAvg     = avgCost > 0 && openAiEst != null && openAiEst.cost > avgCost;
-  const hasSavings   = cheapest && priciest && cheapest.provider !== priciest.provider;
-  const savings      = hasSavings ? priciest!.cost - cheapest!.cost : 0;
-  const savingsPct   = hasSavings ? Math.round((savings / priciest!.cost) * 100) : 0;
+  const cheapest   = estimates?.[0];
+  const priciest   = estimates?.[estimates.length - 1];
+  const openAiEst  = estimates?.find(e => e.provider === "OpenAI");
+  const aboveAvg   = avgCost > 0 && openAiEst != null && openAiEst.cost > avgCost;
+  const hasSavings = cheapest && priciest && cheapest.provider !== priciest.provider;
+  const savings    = hasSavings ? priciest!.cost - cheapest!.cost : 0;
+  const savingsPct = hasSavings ? Math.round((savings / priciest!.cost) * 100) : 0;
+
+  // Re-estimate costs for the optimized prompt to show token/cost delta
+  const optimizedEstimates = useMemo(
+    () => optimizeResult ? estimatePromptCosts(optimizeResult.optimizedText) : null,
+    [optimizeResult],
+  );
+  const origTokens    = estimates?.[0]?.inputTokens ?? 0;
+  const newTokens     = optimizedEstimates?.[0]?.inputTokens ?? 0;
+  const origOpenAiCost = openAiEst?.cost ?? 0;
+  const newOpenAiCost  = optimizedEstimates?.find(e => e.provider === "OpenAI")?.cost ?? 0;
+  const costSaved      = Math.max(0, origOpenAiCost - newOpenAiCost);
+
+  const handleOptimize = async () => {
+    if (!text.trim() || optimizing) return;
+    setOptimizing(true);
+    setOptimizeError(null);
+    setOptimizeResult(null);
+    try {
+      const res = await fetch("/api/proxy/chat", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "anthropic",
+          model: "claude-haiku-4-5-20251001",
+          messages: [{
+            role: "user",
+            content: `Shorten this prompt to use fewer tokens while keeping the same meaning. Return only the shortened prompt, nothing else: ${text}`,
+          }],
+          taskLabel: "Prompt optimization",
+        }),
+      });
+      const data = await res.json() as {
+        content?: string;
+        usage?: { input_tokens: number; output_tokens: number };
+        cost?: number;
+        error?: string;
+      };
+      if (!res.ok || data.error) {
+        setOptimizeError(data.error ?? "Optimization failed — check your API key");
+      } else {
+        setOptimizeResult({
+          optimizedText:      data.content ?? "",
+          actualCost:         data.cost ?? 0,
+          actualInputTokens:  data.usage?.input_tokens ?? 0,
+          actualOutputTokens: data.usage?.output_tokens ?? 0,
+        });
+      }
+    } catch {
+      setOptimizeError("Network error — could not reach the server");
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!optimizeResult?.optimizedText) return;
+    await navigator.clipboard.writeText(optimizeResult.optimizedText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.19 }}
@@ -325,11 +404,34 @@ function CostPreviewPanel({ avgCost }: { avgCost: number }) {
         className="w-full bg-secondary/40 border border-border/50 rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 resize-none transition-all duration-200"
       />
 
-      {/* Results */}
+      {/* Optimize button — appears once there's text */}
+      <AnimatePresence>
+        {text.trim().length > 0 && (
+          <motion.div key="opt-btn"
+            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            <motion.button
+              onClick={handleOptimize}
+              disabled={optimizing}
+              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.02 }}
+              className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-500/15 border border-violet-500/30 hover:bg-violet-500/22 text-sm font-bold text-violet-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {optimizing
+                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" />Optimizing…</>
+                : <><Sparkles className="w-3.5 h-3.5" />Optimize Prompt</>
+              }
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Live cost estimates */}
       <AnimatePresence>
         {estimates ? (
-          <motion.div
-            key="results"
+          <motion.div key="results"
             initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22, ease: "easeOut" }}
             className="overflow-hidden"
@@ -346,9 +448,7 @@ function CostPreviewPanel({ avgCost }: { avgCost: number }) {
                 return (
                   <div key={e.provider}
                     className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border transition-colors ${
-                      isCheapest
-                        ? "bg-emerald-400/8 border-emerald-400/25"
-                        : "bg-secondary/30 border-border/30"
+                      isCheapest ? "bg-emerald-400/8 border-emerald-400/25" : "bg-secondary/30 border-border/30"
                     }`}>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${PROVIDER_COLOR[e.provider] ?? "text-muted-foreground bg-secondary"}`}>
@@ -381,8 +481,7 @@ function CostPreviewPanel({ avgCost }: { avgCost: number }) {
                     <span className="font-semibold text-emerald-400">{cheapest!.model}</span>
                     {" "}saves{" "}
                     <span className="font-bold text-emerald-400 font-mono">~{fmtCost(savings)}</span>
-                    {" "}
-                    <span className="text-emerald-400/80">({savingsPct}% cheaper)</span>
+                    {" "}<span className="text-emerald-400/80">({savingsPct}% cheaper)</span>
                   </p>
                 </motion.div>
               )}
@@ -399,6 +498,75 @@ function CostPreviewPanel({ avgCost }: { avgCost: number }) {
                   </p>
                 </motion.div>
               )}
+
+              {/* ── Optimization result / error ── */}
+              <AnimatePresence>
+                {optimizeError && (
+                  <motion.div key="opt-error"
+                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red-500/8 border border-red-500/20">
+                    <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-400 leading-snug">{optimizeError}</p>
+                  </motion.div>
+                )}
+
+                {optimizeResult && (
+                  <motion.div key="opt-result"
+                    initial={{ opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.97 }}
+                    transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                    className="rounded-xl border border-violet-500/25 bg-violet-500/8 overflow-hidden"
+                  >
+                    {/* Result header with token comparison */}
+                    <div className="flex items-center justify-between px-3.5 pt-3 pb-2.5 border-b border-violet-500/15">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+                        <p className="text-xs font-bold text-violet-300">Optimized Prompt</p>
+                      </div>
+                      <div className="flex items-center gap-1 text-[10px] font-mono">
+                        <span className="line-through text-muted-foreground/50">{origTokens}t</span>
+                        <ChevronRight className="w-3 h-3 text-muted-foreground/40" />
+                        <span className="text-emerald-400 font-bold">{newTokens}t</span>
+                        {origTokens > newTokens && (
+                          <span className="text-emerald-400/80 ml-0.5">(-{origTokens - newTokens}t)</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* The optimized text */}
+                    <p className="px-3.5 py-3 text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                      {optimizeResult.optimizedText}
+                    </p>
+
+                    {/* Footer: savings + copy button */}
+                    <div className="flex items-center justify-between px-3.5 pb-3 pt-2 border-t border-violet-500/15 gap-3 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground/70 mb-0.5">Saves on OpenAI</p>
+                          <p className="text-sm font-bold font-mono text-emerald-400">
+                            {costSaved > 0 ? `~${fmtCost(costSaved)}` : "—"}
+                          </p>
+                        </div>
+                        <div className="w-px h-8 bg-border/30" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground/70 mb-0.5">Haiku call cost</p>
+                          <p className="text-xs font-mono text-muted-foreground">{fmtCost(optimizeResult.actualCost)}</p>
+                        </div>
+                      </div>
+                      <motion.button
+                        onClick={handleCopy}
+                        whileTap={{ scale: 0.95 }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/20 border border-violet-500/30 hover:bg-violet-500/30 text-xs font-bold transition-colors flex-shrink-0"
+                      >
+                        {copied
+                          ? <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /><span className="text-emerald-400">Copied!</span></>
+                          : <><Copy className="w-3.5 h-3.5 text-violet-300" /><span className="text-violet-300">Use this prompt</span></>
+                        }
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
         ) : (
