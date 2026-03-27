@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { eq, desc } from "drizzle-orm";
 import { db, costLogsTable } from "@workspace/db";
 
 // ─── Per-provider token-rate model ($/token) ─────────────────────────────────
@@ -231,6 +232,30 @@ router.post("/wallet/optimize", (req: Request, res: Response) => {
   }
 
   res.json({ wallet, newTransactions: newTxs, tip: pick(SAVINGS_TIPS) });
+});
+
+// ─── GET /api/wallet/history — last 20 DB rows for the current user ──────────
+router.get("/wallet/history", async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  if (!db) {
+    res.json({ rows: [] });
+    return;
+  }
+
+  try {
+    const rows = await db
+      .select()
+      .from(costLogsTable)
+      .where(eq(costLogsTable.userId, req.user.id))
+      .orderBy(desc(costLogsTable.createdAt))
+      .limit(20);
+
+    res.json({ rows });
+  } catch (err) {
+    console.error("[wallet] history query failed:", err);
+    res.status(500).json({ error: "Failed to fetch history" });
+  }
 });
 
 // ─── POST /api/wallet/mode ────────────────────────────────────────────────────
