@@ -8,10 +8,11 @@ import Home from "@/pages/home";
 import LoginPage from "@/pages/login";
 
 // ─── Lazy-load secondary pages (reduces initial bundle) ───────────────────────
-const Usage    = lazy(() => import("@/pages/usage"));
-const Alerts   = lazy(() => import("@/pages/alerts"));
+const Usage     = lazy(() => import("@/pages/usage"));
+const Alerts    = lazy(() => import("@/pages/alerts"));
 const Autopilot = lazy(() => import("@/pages/autopilot"));
-const NotFound = lazy(() => import("@/pages/not-found"));
+const Simulator = lazy(() => import("@/pages/simulator"));
+const NotFound  = lazy(() => import("@/pages/not-found"));
 
 // ─── Auth context (shared across pages / Shell) ───────────────────────────────
 interface AuthCtx {
@@ -41,6 +42,7 @@ function Router() {
         <Route path="/usage" component={Usage} />
         <Route path="/alerts" component={Alerts} />
         <Route path="/autopilot" component={Autopilot} />
+        <Route path="/simulator" component={Simulator} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

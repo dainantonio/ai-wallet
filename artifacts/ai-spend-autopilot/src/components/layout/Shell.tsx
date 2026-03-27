@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Wallet, Home, Sparkles, BarChart3, BellRing, LogOut, User } from "lucide-react";
+import { Wallet, Home, Sparkles, BarChart3, BellRing, FlaskConical, LogOut, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useAuthContext } from "@/App";
@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { path: "/usage",     label: "Usage & Models", icon: BarChart3 },
   { path: "/alerts",    label: "Alert Rules",  icon: BellRing },
   { path: "/autopilot", label: "Smart Spend",  icon: Sparkles },
+  { path: "/simulator", label: "Simulator",    icon: FlaskConical },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
