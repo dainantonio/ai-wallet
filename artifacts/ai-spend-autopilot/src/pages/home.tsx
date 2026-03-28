@@ -12,6 +12,7 @@ import {
   TriangleAlert, XCircle, Gauge, Leaf, Flame,
   CreditCard, Receipt, ArrowDownRight, ArrowUpRight,
   Play, Plus, RefreshCw, X, ShieldCheck, FlaskConical, Copy,
+  Minimize2, Maximize2, Globe,
 } from "lucide-react";
 import { motion, AnimatePresence, animate as motionAnimate } from "framer-motion";
 import type { UsageData } from "@workspace/api-client-react/src/generated/api.schemas";
@@ -709,6 +710,207 @@ function CostPreviewPanel({ avgCost }: { avgCost: number }) {
           </motion.p>
         )}
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ─── Browser Extension Widget ────────────────────────────────────────────────
+
+interface ExtDetection {
+  provider: string;
+  model: string;
+  cost: number;
+  ts: number;
+}
+
+const EXT_MODELS: Record<string, string> = {
+  OpenAI:    "GPT-4o",
+  Anthropic: "Claude 3.5 Sonnet",
+  Gemini:    "Gemini 1.5 Pro",
+};
+
+const EXT_PROVIDER_COLOR: Record<string, string> = {
+  OpenAI:    "text-blue-400",
+  Anthropic: "text-orange-400",
+  Gemini:    "text-green-400",
+};
+
+function ExtensionWidget() {
+  const [minimized,     setMinimized]     = useState(false);
+  const [sessionCost,   setSessionCost]   = useState(0);
+  const [lastDetection, setLastDetection] = useState<ExtDetection | null>(null);
+  const [flash,         setFlash]         = useState(false);
+  const [tabCount]                        = useState(() => Math.floor(Math.random() * 4) + 2); // 2-5 tabs
+
+  // Simulate detecting a new AI call every 30 s
+  useEffect(() => {
+    const detect = () => {
+      const provider = USAGE_PROVIDERS[Math.floor(Math.random() * USAGE_PROVIDERS.length)];
+      const cost     = +(Math.random() * (0.08 - 0.01) + 0.01).toFixed(4);
+      const model    = EXT_MODELS[provider] ?? "GPT-4o";
+      setLastDetection({ provider, model, cost, ts: Date.now() });
+      setSessionCost(prev => +(prev + cost).toFixed(4));
+      setFlash(true);
+      setTimeout(() => setFlash(false), 1200);
+    };
+
+    // Fire once after a short delay so something shows immediately
+    const init = setTimeout(detect, 2500);
+    const tick = setInterval(detect, 30_000);
+    return () => { clearTimeout(init); clearInterval(tick); };
+  }, []);
+
+  const elapsed = lastDetection
+    ? Math.floor((Date.now() - lastDetection.ts) / 1000)
+    : null;
+
+  // Re-render the elapsed label every 5 s
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(v => v + 1), 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  function fmtElapsed(sec: number) {
+    if (sec < 5)  return "just now";
+    if (sec < 60) return `${sec}s ago`;
+    return `${Math.floor(sec / 60)}m ago`;
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay: 1.2, duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+      className="fixed bottom-6 right-6 z-40 select-none"
+      style={{ width: minimized ? "auto" : "260px" }}
+    >
+      {/* Flash ring on new detection */}
+      <AnimatePresence>
+        {flash && (
+          <motion.div
+            key="flash"
+            initial={{ opacity: 0.5, scale: 0.95 }}
+            animate={{ opacity: 0, scale: 1.08 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="absolute inset-0 rounded-2xl border-2 border-primary/60 pointer-events-none"
+          />
+        )}
+      </AnimatePresence>
+
+      <div
+        className="rounded-2xl border border-white/[0.09] overflow-hidden"
+        style={{
+          background:    "rgba(8,8,20,0.92)",
+          backdropFilter:"blur(24px) saturate(160%)",
+          boxShadow:     "0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04) inset",
+        }}
+      >
+        {/* ── Title bar ── */}
+        <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/[0.06]">
+          <div className="flex items-center gap-2">
+            <Globe className="w-3.5 h-3.5 text-primary" />
+            <span className="text-[11px] font-bold text-white/90 tracking-wide">AI Wallet</span>
+            <span className="text-[9px] text-white/35 font-medium">ext</span>
+          </div>
+          <button
+            onClick={() => setMinimized(v => !v)}
+            className="p-1 rounded-md text-white/40 hover:text-white/80 hover:bg-white/[0.07] transition-colors"
+          >
+            {minimized
+              ? <Maximize2 className="w-3 h-3" />
+              : <Minimize2 className="w-3 h-3" />
+            }
+          </button>
+        </div>
+
+        {/* ── Body (hidden when minimized) ── */}
+        <AnimatePresence initial={false}>
+          {!minimized && (
+            <motion.div
+              key="body"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="overflow-hidden"
+            >
+              <div className="px-3.5 py-3 space-y-3">
+
+                {/* Status row */}
+                <div className="flex items-center gap-2">
+                  {/* Pulsing green dot */}
+                  <span className="relative flex h-2 w-2 flex-shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-60" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-success shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
+                  </span>
+                  <span className="text-[11px] text-white/70">
+                    Tracking AI usage across{" "}
+                    <span className="text-white/90 font-semibold">{tabCount} tabs</span>
+                  </span>
+                </div>
+
+                {/* Session cost */}
+                <div className="flex items-center justify-between bg-white/[0.04] rounded-xl px-3 py-2.5 border border-white/[0.06]">
+                  <span className="text-[10px] text-white/50 font-medium uppercase tracking-wider">
+                    Session cost
+                  </span>
+                  <AnimatePresence mode="wait">
+                    <motion.span
+                      key={sessionCost}
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 5 }}
+                      transition={{ duration: 0.2 }}
+                      className="text-sm font-black font-mono text-white tabular-nums"
+                    >
+                      ${sessionCost.toFixed(4)}
+                    </motion.span>
+                  </AnimatePresence>
+                </div>
+
+                {/* Last detected call */}
+                <div>
+                  <p className="text-[9px] font-bold text-white/35 uppercase tracking-wider mb-1.5">
+                    Last detected call
+                  </p>
+                  {lastDetection ? (
+                    <motion.div
+                      key={lastDetection.ts}
+                      initial={{ opacity: 0, x: 8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <span className={`text-[11px] font-semibold ${EXT_PROVIDER_COLOR[lastDetection.provider] ?? "text-white/80"}`}>
+                          {lastDetection.model}
+                        </span>
+                        <span className="text-[10px] text-white/35 ml-1.5">
+                          {elapsed !== null ? fmtElapsed(Math.floor((Date.now() - lastDetection.ts) / 1000)) : ""}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-bold font-mono text-white/80 flex-shrink-0">
+                        ${lastDetection.cost.toFixed(4)}
+                      </span>
+                    </motion.div>
+                  ) : (
+                    <p className="text-[11px] text-white/30 italic">Waiting for detection…</p>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Footer */}
+              <div className="px-3.5 pb-3 pt-0.5 flex items-center justify-between">
+                <span className="text-[9px] text-white/25">AI Wallet Extension v1.0</span>
+                <span className="text-[9px] font-medium text-primary/70">● live</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 }
@@ -1916,6 +2118,9 @@ function HomeInner({ data }: { data: UsageData }) {
           />
         )}
       </AnimatePresence>
+
+      {/* ── Browser Extension Simulation Widget ── */}
+      <ExtensionWidget />
     </Shell>
   );
 }
