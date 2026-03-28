@@ -1366,9 +1366,8 @@ function AgentChat({ wallet, data, onOptimize, onModeSwitch }: AgentChatProps) {
         }),
       });
 
-      if (!res.ok) throw new Error(`${res.status}`);
       const json = await res.json() as { content?: string; error?: string };
-      if (json.error) throw new Error(json.error);
+      if (!res.ok || json.error) throw new Error(json.error ?? `HTTP ${res.status}`);
 
       const raw         = json.content ?? "I couldn't generate a response right now.";
       const action      = parseAction(raw);
@@ -1386,9 +1385,10 @@ function AgentChat({ wallet, data, onOptimize, onModeSwitch }: AgentChatProps) {
       if (!isOpen) setUnread(v => v + 1);
 
     } catch (err) {
-      const msg = err instanceof Error && err.message.includes("configured")
-        ? "Provider not configured — add your ANTHROPIC_API_KEY in settings."
-        : "Couldn't reach the API right now. Please try again.";
+      const raw = err instanceof Error ? err.message : "";
+      const msg = raw.includes("not set") || raw.includes("not configured") || raw.includes("configured")
+        ? `API key missing — add your GEMINI_API_KEY in Settings (or Replit Secrets). Server said: "${raw}"`
+        : `Couldn't reach the API right now. ${raw ? `(${raw})` : "Please try again."}`;
       addMsg({ role: "assistant", content: msg });
     } finally {
       setTyping(false);

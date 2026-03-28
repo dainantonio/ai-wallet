@@ -47,6 +47,27 @@ function logCostToDb(
   });
 }
 
+// Sanitise a request body for logging — strips nothing sensitive here, but
+// truncates long message content so logs stay readable.
+function sanitiseBody(body: Record<string, unknown>): Record<string, unknown> {
+  const msgs = body.messages;
+  return {
+    ...body,
+    messages: Array.isArray(msgs)
+      ? msgs.map((m: unknown) => {
+          if (typeof m !== "object" || m === null) return m;
+          const { role, content } = m as { role?: unknown; content?: unknown };
+          return {
+            role,
+            content: typeof content === "string" && content.length > 120
+              ? content.slice(0, 120) + `…(${content.length} chars)`
+              : content,
+          };
+        })
+      : msgs,
+  };
+}
+
 // ─── POST /api/proxy/chat ─────────────────────────────────────────────────────
 router.post("/proxy/chat", async (req: Request, res: Response) => {
   const { provider, model, messages, userId, taskLabel } = req.body as {
@@ -58,11 +79,13 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
   };
 
   if (!provider || !["openai", "anthropic", "gemini"].includes(provider)) {
+    console.error("[proxy] 400 invalid provider — request body:", sanitiseBody(req.body as Record<string, unknown>));
     res.status(400).json({ error: "provider must be one of: openai, anthropic, gemini" });
     return;
   }
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    console.error("[proxy] 400 empty/missing messages — request body:", sanitiseBody(req.body as Record<string, unknown>));
     res.status(400).json({ error: "messages array is required and must not be empty" });
     return;
   }
@@ -77,7 +100,8 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
     if (provider === "openai") {
       const apiKey = (await getUserApiKey(resolvedUserId, "openai")) ?? process.env.OPENAI_API_KEY;
       if (!apiKey) {
-        res.status(400).json({ error: "Provider not configured" });
+        console.error("[proxy] 400 openai key missing — userId:", resolvedUserId, "OPENAI_API_KEY set:", !!process.env.OPENAI_API_KEY);
+        res.status(400).json({ error: "Provider not configured: OPENAI_API_KEY is not set" });
         return;
       }
 
@@ -102,7 +126,8 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
     if (provider === "anthropic") {
       const apiKey = (await getUserApiKey(resolvedUserId, "anthropic")) ?? process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
-        res.status(400).json({ error: "Provider not configured" });
+        console.error("[proxy] 400 anthropic key missing — userId:", resolvedUserId, "ANTHROPIC_API_KEY set:", !!process.env.ANTHROPIC_API_KEY);
+        res.status(400).json({ error: "Provider not configured: ANTHROPIC_API_KEY is not set" });
         return;
       }
 
@@ -136,7 +161,8 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
     if (provider === "gemini") {
       const apiKey = (await getUserApiKey(resolvedUserId, "google")) ?? process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        res.status(400).json({ error: "Provider not configured" });
+        console.error("[proxy] 400 gemini key missing — userId:", resolvedUserId, "GEMINI_API_KEY set:", !!process.env.GEMINI_API_KEY);
+        res.status(400).json({ error: "Provider not configured: GEMINI_API_KEY is not set" });
         return;
       }
 
