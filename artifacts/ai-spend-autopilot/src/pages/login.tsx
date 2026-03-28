@@ -25,11 +25,11 @@ function FadeIn({ children, delay = 0, className = "" }: {
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 const PROVIDERS = [
-  { label: "OpenAI",    color: "text-blue-400   bg-blue-400/10"   },
-  { label: "Anthropic", color: "text-orange-400 bg-orange-400/10" },
-  { label: "Gemini",    color: "text-green-400  bg-green-400/10"  },
+  { label: "OpenAI",    color: "text-blue-500   bg-blue-500/10"   },
+  { label: "Anthropic", color: "text-orange-500 bg-orange-500/10" },
+  { label: "Gemini",    color: "text-green-500  bg-green-500/10"  },
   { label: "Meta",      color: "text-sky-400    bg-sky-400/10"    },
-  { label: "Mistral",   color: "text-purple-400 bg-purple-400/10" },
+  { label: "Mistral",   color: "text-purple-500 bg-purple-500/10" },
 ];
 
 const STEPS = [
@@ -120,9 +120,23 @@ export default function LoginPage({ onLogin, onDemo }: { onLogin: () => void; on
 
       {/* ── Global background glows ── */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/10 rounded-full blur-[160px] -translate-y-1/2 translate-x-1/3" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-indigo-700/8  rounded-full blur-[140px] translate-y-1/3 -translate-x-1/4" />
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] mix-blend-overlay" />
+        <motion.div
+          animate={{ scale: [1, 1.12, 1], opacity: [0.10, 0.16, 0.10] }}
+          transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary rounded-full blur-[160px] -translate-y-1/2 translate-x-1/3"
+        />
+        <motion.div
+          animate={{ scale: [1, 1.08, 1], opacity: [0.07, 0.12, 0.07] }}
+          transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+          className="absolute bottom-0 left-0 w-[600px] h-[600px] rounded-full blur-[140px] translate-y-1/3 -translate-x-1/4"
+          style={{ background: "radial-gradient(circle, #4338ca, transparent 70%)" }}
+        />
+        <motion.div
+          animate={{ scale: [1, 1.15, 1], opacity: [0.05, 0.09, 0.05] }}
+          transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 5 }}
+          className="absolute top-1/2 left-1/3 w-[500px] h-[500px] rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2"
+          style={{ background: "radial-gradient(circle, #10b981, transparent 70%)" }}
+        />
       </div>
 
       {/* ── Nav ── */}

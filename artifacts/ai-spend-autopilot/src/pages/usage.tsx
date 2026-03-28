@@ -31,19 +31,19 @@ function ChartTooltip({ active, payload, label }: TooltipProps) {
   return (
     <div className="bg-card border border-border/60 rounded-xl px-3 py-2.5 shadow-xl text-xs">
       <p className="font-bold text-foreground mb-1.5">{label && fmtDay(label)}</p>
-      {cost  && <p className="text-red-400">Spent: <span className="font-mono font-bold">${cost.value.toFixed(4)}</span></p>}
-      {saved && saved.value > 0 && <p className="text-emerald-400">Saved: <span className="font-mono font-bold">+${saved.value.toFixed(4)}</span></p>}
+      {cost  && <p className="text-rose-500">Spent: <span className="font-mono font-bold">${cost.value.toFixed(4)}</span></p>}
+      {saved && saved.value > 0 && <p className="text-emerald-500">Saved: <span className="font-mono font-bold">+${saved.value.toFixed(4)}</span></p>}
     </div>
   );
 }
 
 // ─── Color helper for cost bars ───────────────────────────────────────────────
 function costBarColor(cost: number, max: number): string {
-  if (max === 0 || cost === 0) return "rgba(52,211,153,0.6)";
+  if (max === 0 || cost === 0) return "rgba(16,185,129,0.55)";
   const ratio = cost / max;
-  if (ratio < 0.33) return "rgba(52,211,153,0.80)";   // green — low spend
-  if (ratio < 0.67) return "rgba(251,191,36,0.80)";   // amber — medium
-  return "rgba(248,113,113,0.85)";                    // red — high spend
+  if (ratio < 0.33) return "rgba(16,185,129,0.80)";    // emerald-500 — low spend
+  if (ratio < 0.67) return "rgba(245,158,11,0.80)";    // amber-500 — medium
+  return "rgba(244,63,94,0.85)";                       // rose-500 — high spend
 }
 
 // ─── Daily Spend Chart ────────────────────────────────────────────────────────
@@ -70,9 +70,9 @@ function DailySpendChart({ data, isLoading }: { data: DailySpend[]; isLoading: b
           <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">Last 7 days</span>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-400/80 inline-block"/>Low</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400/80 inline-block"/>Medium</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-400/80 inline-block"/>High</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/80 inline-block"/>Low</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500/80 inline-block"/>Medium</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-500/80 inline-block"/>High</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-indigo-400/70 inline-block"/>Saved</span>
         </div>
       </div>
@@ -110,10 +110,10 @@ function DailySpendChart({ data, isLoading }: { data: DailySpend[]; isLoading: b
 // ─── Real Cost Stats Row ──────────────────────────────────────────────────────
 function CostStatsRow({ totals, isLoading }: { totals?: { week_cost: number; month_cost: number; week_saved: number; total_requests: number }; isLoading: boolean }) {
   const stats = [
-    { label: "This Week",   value: `$${(totals?.week_cost   ?? 0).toFixed(4)}`, icon: <ArrowUpRight className="w-4 h-4" />, color: "text-red-400"     },
+    { label: "This Week",   value: `$${(totals?.week_cost   ?? 0).toFixed(4)}`, icon: <ArrowUpRight className="w-4 h-4" />, color: "text-rose-500"    },
     { label: "This Month",  value: `$${(totals?.month_cost  ?? 0).toFixed(4)}`, icon: <Zap className="w-4 h-4" />,          color: "text-primary"     },
-    { label: "Week Saved",  value: `+$${(totals?.week_saved ?? 0).toFixed(4)}`, icon: <TrendingDown className="w-4 h-4" />, color: "text-emerald-400" },
-    { label: "Total Calls", value: formatNumber(totals?.total_requests ?? 0),   icon: <Database className="w-4 h-4" />,     color: "text-blue-400"    },
+    { label: "Week Saved",  value: `+$${(totals?.week_saved ?? 0).toFixed(4)}`, icon: <TrendingDown className="w-4 h-4" />, color: "text-emerald-500" },
+    { label: "Total Calls", value: formatNumber(totals?.total_requests ?? 0),   icon: <Database className="w-4 h-4" />,     color: "text-blue-500"    },
   ];
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -125,7 +125,7 @@ function CostStatsRow({ totals, isLoading }: { totals?: { week_cost: number; mon
           </div>
           {isLoading
             ? <div className="h-5 w-20 bg-secondary/60 rounded animate-pulse" />
-            : <p className="text-lg font-black font-mono tracking-tight">{s.value}</p>
+            : <p className="text-2xl font-black font-mono tracking-tight tabular-nums">{s.value}</p>
           }
         </motion.div>
       ))}
@@ -157,7 +157,7 @@ function RealModelBreakdown({ models }: { models: ModelSpend[] }) {
                 </div>
                 <div className="text-right">
                   <p className="font-bold font-mono text-sm">${m.total_cost.toFixed(4)}</p>
-                  <p className="text-xs text-emerald-400">saved ${m.total_saved.toFixed(4)}</p>
+                  <p className="text-xs text-emerald-500">saved ${m.total_saved.toFixed(4)}</p>
                 </div>
               </div>
               <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
@@ -177,12 +177,12 @@ function RealModelBreakdown({ models }: { models: ModelSpend[] }) {
 
 // ─── Provider badge colors (mirrors home.tsx) ─────────────────────────────────
 const PROVIDER_COLOR: Record<string, string> = {
-  "OpenAI":    "text-blue-400 bg-blue-400/10",
-  "Anthropic": "text-orange-400 bg-orange-400/10",
-  "Gemini":    "text-green-400 bg-green-400/10",
-  "Google":    "text-green-400 bg-green-400/10",
+  "OpenAI":    "text-blue-500 bg-blue-500/10",
+  "Anthropic": "text-orange-500 bg-orange-500/10",
+  "Gemini":    "text-green-500 bg-green-500/10",
+  "Google":    "text-green-500 bg-green-500/10",
   "Meta":      "text-sky-400 bg-sky-400/10",
-  "Mistral":   "text-purple-400 bg-purple-400/10",
+  "Mistral":   "text-purple-500 bg-purple-500/10",
 };
 
 function detectProvider(label: string): string {
@@ -264,7 +264,7 @@ function TopExpensivePrompts({
                 </div>
               </div>
               <div className="text-right flex-shrink-0 ml-3">
-                <p className={`text-sm font-bold font-mono ${i === 0 ? "text-red-400" : "text-foreground"}`}>
+                <p className={`text-sm font-bold font-mono tabular-nums ${i === 0 ? "text-rose-500" : "text-foreground"}`}>
                   ~${item.estimatedCost.toFixed(4)}
                 </p>
                 <p className="text-[10px] text-muted-foreground">estimated</p>
@@ -293,12 +293,12 @@ function SavingsHighlight({
       className="glass-panel rounded-2xl p-6 relative overflow-hidden stat-card-premium"
     >
       {/* Ambient glow */}
-      <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-400/8 rounded-full blur-[60px] translate-x-1/3 -translate-y-1/3 pointer-events-none" />
+      <div className="absolute top-0 right-0 w-48 h-48 rounded-full blur-[60px] translate-x-1/3 -translate-y-1/3 pointer-events-none" style={{ background: "radial-gradient(circle, rgba(16,185,129,0.12), transparent 70%)" }} />
 
       <div className="flex items-center gap-2 mb-4 relative z-10">
-        <Sparkles className="w-5 h-5 text-emerald-400" />
+        <Sparkles className="w-5 h-5 text-emerald-500" />
         <h2 className="text-xl font-display font-bold">Savings Opportunity</h2>
-        <span className="text-xs text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-2 py-0.5 rounded-full ml-auto">
+        <span className="text-xs text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full ml-auto">
           Today
         </span>
       </div>
@@ -311,10 +311,10 @@ function SavingsHighlight({
           <div className="h-12 w-40 bg-secondary/60 rounded-xl animate-pulse" />
         ) : (
           <div className="flex items-end gap-3">
-            <p className="text-5xl font-black font-mono tracking-tight text-emerald-400">
+            <p className="text-5xl font-black font-mono tracking-tight tabular-nums text-emerald-500">
               ${potential}
             </p>
-            <p className="text-lg font-bold text-emerald-400/70 mb-1.5">today</p>
+            <p className="text-lg font-bold text-emerald-500/70 mb-1.5">today</p>
           </div>
         )}
         <p className="text-sm text-muted-foreground mt-2 leading-snug">
@@ -331,15 +331,15 @@ function SavingsHighlight({
           </div>
           <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full"
+              className="h-full bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-full"
               initial={{ width: 0 }}
               animate={{ width: `${pct}%` }}
               transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
             />
           </div>
           <div className="flex justify-between text-[10px] mt-1">
-            <span className="text-red-400 font-mono">${dailySpend.toFixed(4)}</span>
-            <span className="text-emerald-400 font-mono font-bold">${(dailySpend - potential).toFixed(4)} possible</span>
+            <span className="text-rose-500 font-mono tabular-nums">${dailySpend.toFixed(4)}</span>
+            <span className="text-emerald-500 font-mono font-bold tabular-nums">${(dailySpend - potential).toFixed(4)} possible</span>
           </div>
         </div>
       </div>
@@ -376,7 +376,7 @@ export default function Usage() {
       {/* ── Live cost stats (Supabase) ── */}
       <section className="mb-6">
         <div className="flex items-center gap-2 mb-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Live Cost Tracking</span>
         </div>
         <CostStatsRow totals={costData?.totals} isLoading={costLoading} />

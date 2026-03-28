@@ -41,9 +41,9 @@ const MODES: {
   id: SpendMode; label: string; desc: string; icon: React.ReactNode;
   switchPct: number; color: string; savingsTag: string;
 }[] = [
-  { id: "saver",       label: "Saver",       desc: "Max savings, slight latency increase", icon: <Leaf className="w-4 h-4" />,  switchPct: 0.50, color: "text-emerald-400 border-emerald-400/40 bg-emerald-400/10", savingsTag: "saving more" },
+  { id: "saver",       label: "Saver",       desc: "Max savings, slight latency increase", icon: <Leaf className="w-4 h-4" />,  switchPct: 0.50, color: "text-emerald-500 border-emerald-500/40 bg-emerald-500/10", savingsTag: "saving more" },
   { id: "balanced",    label: "Balanced",    desc: "Smart mix of cost and performance",    icon: <Gauge className="w-4 h-4" />, switchPct: 0.30, color: "text-primary border-primary/40 bg-primary/10",             savingsTag: "balanced approach" },
-  { id: "performance", label: "Performance", desc: "Best models, full speed",             icon: <Flame className="w-4 h-4" />, switchPct: 0.00, color: "text-orange-400 border-orange-400/40 bg-orange-400/10",    savingsTag: "max performance" },
+  { id: "performance", label: "Performance", desc: "Best models, full speed",             icon: <Flame className="w-4 h-4" />, switchPct: 0.00, color: "text-orange-500 border-orange-500/40 bg-orange-500/10",    savingsTag: "max performance" },
 ];
 
 const GPT4O_COST = 0.0665;
@@ -121,14 +121,14 @@ type ResponseHintId = typeof RESPONSE_HINTS[number]["id"];
 
 // ─── Provider badge colors ────────────────────────────────────────────────────
 const PROVIDER_COLOR: Record<string, string> = {
-  "OpenAI":    "text-blue-400 bg-blue-400/10",
-  "Anthropic": "text-orange-400 bg-orange-400/10",
-  "Gemini":    "text-green-400 bg-green-400/10",
-  "Google":    "text-green-400 bg-green-400/10",  // legacy alias
+  "OpenAI":    "text-blue-500 bg-blue-500/10",
+  "Anthropic": "text-orange-500 bg-orange-500/10",
+  "Gemini":    "text-green-500 bg-green-500/10",
+  "Google":    "text-green-500 bg-green-500/10",  // legacy alias
   "Meta":      "text-sky-400 bg-sky-400/10",
-  "Mistral":   "text-purple-400 bg-purple-400/10",
+  "Mistral":   "text-purple-500 bg-purple-500/10",
   "AI Wallet": "text-violet-400 bg-violet-400/10",
-  "Wallet":    "text-emerald-400 bg-emerald-400/10",
+  "Wallet":    "text-emerald-500 bg-emerald-500/10",
 };
 
 const CLIENT_TASK_LABELS = [
@@ -1633,9 +1633,9 @@ const EXT_MODELS: Record<string, string> = {
 };
 
 const EXT_PROVIDER_COLOR: Record<string, string> = {
-  OpenAI:    "text-blue-400",
-  Anthropic: "text-orange-400",
-  Gemini:    "text-green-400",
+  OpenAI:    "text-blue-500",
+  Anthropic: "text-orange-500",
+  Gemini:    "text-green-500",
 };
 
 function ExtensionWidget() {

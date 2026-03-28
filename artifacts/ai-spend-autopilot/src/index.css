@@ -42,46 +42,50 @@
   /* Enforce Dark Mode for the entire application as per requirements */
   color-scheme: dark;
 
-  /* Deep premium black — richer than before */
-  --background: 228 42% 3%;
-  --foreground: 210 40% 97%;
+  /* Deep warm dark — #0a0a14 */
+  --background: 240 33% 6%;
+  --foreground: 210 40% 98%;   /* #f8fafc — near white, not pure white */
 
-  /* Cards elevated over the deep background */
-  --card: 226 38% 5.5%;
-  --card-foreground: 210 40% 97%;
+  /* Card/panel background — #0f0f1f */
+  --card: 240 35% 9%;
+  --card-foreground: 210 40% 98%;
 
-  --popover: 226 38% 5.5%;
-  --popover-foreground: 210 40% 97%;
+  --popover: 240 35% 9%;
+  --popover-foreground: 210 40% 98%;
 
-  /* Crisp subtle borders */
-  --border: 222 22% 13%;
-  --input: 222 22% 13%;
+  /* Subtle dark borders — rgba(255,255,255,0.06) feel */
+  --border: 240 15% 16%;
+  --input: 240 15% 16%;
 
-  /* Electric violet-indigo primary */
-  --primary: 243 82% 63%;
+  /* Indigo primary — #6366f1 */
+  --primary: 239 84% 67%;
   --primary-foreground: 0 0% 100%;
 
-  /* Rich dark secondary */
-  --secondary: 222 24% 10%;
-  --secondary-foreground: 210 40% 97%;
+  /* Dark secondary surfaces */
+  --secondary: 240 28% 8%;
+  --secondary-foreground: 210 40% 98%;
 
   /* Muted elements */
-  --muted: 222 24% 10%;
-  --muted-foreground: 215 22% 62%;
+  --muted: 240 28% 8%;
+  --muted-foreground: 215 20% 65%;  /* #94a3b8 slate-400 */
 
-  /* Accents */
-  --accent: 243 82% 63%;
-  --accent-foreground: 210 40% 97%;
+  /* Accent same as primary */
+  --accent: 239 84% 67%;
+  --accent-foreground: 210 40% 98%;
 
-  /* Status Colors */
-  --destructive: 350 88% 58%;
+  /* Danger — #f43f5e rose */
+  --destructive: 349 89% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  /* Bright neon emerald */
-  --success: 152 90% 42%;
+  /* Success / savings — #10b981 emerald */
+  --success: 160 84% 39%;
   --success-foreground: 0 0% 100%;
 
-  --ring: 243 82% 63%;
+  /* Warning — #f59e0b amber */
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 100%;
+
+  --ring: 239 84% 67%;
   --radius: 1rem;
 }
 
@@ -135,25 +139,29 @@ input[type="range"]::-moz-range-thumb {
 }
 
 @layer utilities {
-  /* Richer glassmorphism — deeper blur, crisper border, more depth */
+  /* Richer glassmorphism — #0f0f1f card background */
   .glass-panel {
-    background: rgba(10, 10, 24, 0.72);
+    background: rgba(15, 15, 31, 0.78);
     backdrop-filter: blur(28px) saturate(160%);
     -webkit-backdrop-filter: blur(28px) saturate(160%);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    box-shadow: 0 8px 40px -8px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04) inset;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 8px 40px -8px rgba(0,0,0,0.70), 0 0 0 1px rgba(255,255,255,0.03) inset;
+    transition: border-color 0.25s ease;
+  }
+  .glass-panel:hover {
+    border-color: rgba(255,255,255,0.10);
   }
 
   /* Elevated fintech stat card */
   .fintech-card {
-    background: rgba(12, 11, 26, 0.88);
+    background: rgba(15, 15, 31, 0.92);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.06);
     box-shadow: 0 2px 16px -4px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03) inset;
   }
 
-  /* Premium stat card — animates gradient in on hover */
+  /* Premium stat card — indigo glow on hover */
   .stat-card-premium {
     position: relative;
     transition: box-shadow 0.28s ease, border-color 0.28s ease, transform 0.22s ease;
@@ -163,15 +171,15 @@ input[type="range"]::-moz-range-thumb {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: linear-gradient(135deg, hsl(var(--primary) / 0.08) 0%, transparent 60%);
+    background: linear-gradient(135deg, rgba(99,102,241,0.07) 0%, transparent 60%);
     opacity: 0;
     transition: opacity 0.3s ease;
     pointer-events: none;
   }
   .stat-card-premium:hover::before { opacity: 1; }
   .stat-card-premium:hover {
-    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.22), 0 12px 32px -8px hsl(var(--primary) / 0.14);
-    border-color: hsl(var(--primary) / 0.22) !important;
+    box-shadow: 0 0 20px rgba(99,102,241,0.05), 0 12px 32px -8px rgba(0,0,0,0.55);
+    border-color: rgba(99,102,241,0.40) !important;
     transform: translateY(-2px);
   }
 
@@ -198,10 +206,15 @@ input[type="range"]::-moz-range-thumb {
     background-image: linear-gradient(135deg, #a78bfa 0%, #818cf8 40%, #60a5fa 100%);
   }
 
-  /* Premium heading gradient — navy → violet → indigo */
+  /* Premium heading gradient — near-white → violet → indigo */
   .heading-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, #e0e7ff 0%, #c4b5fd 35%, #818cf8 70%, #6366f1 100%);
+    background-image: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 25%, #c4b5fd 55%, #6366f1 100%);
+  }
+
+  /* Tabular numeric spacing for all mono/stat numbers */
+  .font-mono, .font-black, .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 
   /* Transaction row: subtle hover, no layout shift */

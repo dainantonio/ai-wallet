@@ -93,7 +93,7 @@ function CostCard({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 6 }}
           transition={{ duration: 0.2 }}
-          className="font-display text-2xl font-bold text-foreground tracking-tight"
+          className="font-display text-3xl font-bold text-foreground tracking-tight tabular-nums"
         >
           {fmt(cost)}
         </motion.p>

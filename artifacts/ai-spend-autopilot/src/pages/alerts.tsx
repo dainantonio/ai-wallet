@@ -162,11 +162,11 @@ const LEVEL_STYLES: Record<AlertLevel, {
     label:     "Critical",
   },
   warning: {
-    border:    "border-yellow-500/40",
-    icon:      "bg-yellow-500/20 text-yellow-400",
-    badge:     "bg-yellow-500/15",
-    badgeText: "text-yellow-400",
-    glow:      "shadow-[0_0_24px_rgba(234,179,8,0.08)]",
+    border:    "border-amber-500/40",
+    icon:      "bg-amber-500/20 text-amber-500",
+    badge:     "bg-amber-500/15",
+    badgeText: "text-amber-500",
+    glow:      "shadow-[0_0_24px_rgba(245,158,11,0.08)]",
     label:     "Warning",
   },
   spike: {
@@ -270,7 +270,7 @@ export default function Alerts() {
   const budgetPct   = budget > 0 ? Math.min(((summary?.thisMonth ?? 0) / budget) * 100, 100) : 0;
   const barColor    =
     budgetPct >= 100 ? "bg-destructive" :
-    budgetPct >= 80  ? "bg-yellow-500"  :
+    budgetPct >= 80  ? "bg-amber-500"   :
                        "bg-success";
 
   const handleBudgetBlur = () => {
@@ -373,8 +373,8 @@ export default function Alerts() {
             <div className="grid grid-cols-2 gap-x-6 gap-y-2">
               {[
                 { dot: "bg-success",         label: "On Track",        rule: "Spend < 50% of last month" },
-                { dot: "bg-yellow-500",       label: "Warning",         rule: "Monthly spend > $50" },
-                { dot: "bg-orange-400",       label: "Spike",           rule: "Today > 2× daily average" },
+                { dot: "bg-amber-500",       label: "Warning",         rule: "Monthly spend > $50" },
+                { dot: "bg-orange-500",       label: "Spike",           rule: "Today > 2× daily average" },
                 { dot: "bg-destructive",      label: "Critical",        rule: "Monthly spend > $100" },
               ].map(({ dot, label, rule }) => (
                 <div key={label} className="flex items-start gap-2">
@@ -399,12 +399,12 @@ export default function Alerts() {
             transition={{ delay: 0.1 }}
             className={`glass-panel p-6 rounded-2xl border transition-colors duration-300 stat-card-premium ${
               budgetPct >= 100 ? "border-destructive/40" :
-              budgetPct >= 80  ? "border-yellow-500/30"  :
+              budgetPct >= 80  ? "border-amber-500/30"   :
                                  "border-border/40"
             }`}
           >
             <div className="flex items-center gap-2 mb-4">
-              <Zap className={`w-4 h-4 ${budgetPct >= 80 ? "text-yellow-400" : "text-primary"}`} />
+              <Zap className={`w-4 h-4 ${budgetPct >= 80 ? "text-amber-500" : "text-primary"}`} />
               <h2 className="font-display font-bold text-base">Monthly Budget</h2>
             </div>
 
@@ -438,7 +438,7 @@ export default function Alerts() {
                 {summaryLoading ? (
                   <Skeleton className="h-3 w-10" />
                 ) : (
-                  <span className={budgetPct >= 80 ? "font-bold text-yellow-400" : ""}>
+                  <span className={budgetPct >= 80 ? "font-bold text-amber-500" : ""}>
                     {budgetPct.toFixed(1)}%
                   </span>
                 )}
@@ -461,7 +461,7 @@ export default function Alerts() {
             {!summaryLoading && (
               <div className={`flex items-center gap-2 text-sm font-medium ${
                 budgetPct >= 100 ? "text-destructive" :
-                budgetPct >= 80  ? "text-yellow-400"  :
+                budgetPct >= 80  ? "text-amber-500"  :
                                    "text-success"
               }`}>
                 {budgetPct >= 100 ? (

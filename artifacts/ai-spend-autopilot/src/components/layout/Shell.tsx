@@ -43,7 +43,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-72 flex-col border-r border-white/[0.06] z-20 relative"
-        style={{ background: "rgba(7,7,18,0.82)", backdropFilter: "blur(32px) saturate(160%)" }}>
+        style={{ background: "rgba(8,8,18,0.94)", backdropFilter: "blur(32px) saturate(180%)" }}>
         {/* Brand */}
         <div className="p-6 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-primary/30 relative"
