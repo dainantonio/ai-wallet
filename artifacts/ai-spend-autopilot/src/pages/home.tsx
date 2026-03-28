@@ -1250,58 +1250,24 @@ const QUICK_PROMPTS = [
 
 function buildSystemPrompt(wallet: WalletState | null, data: UsageData): string {
   if (!wallet) {
-    return `You are an AI spending assistant for AI Wallet. The user's wallet data is still loading.
-For every message, respond with exactly: "I can see your wallet is loading — try again in a moment."
-Do not answer any other questions until wallet data is available.`;
+    return `You are an AI spending assistant built into AI Wallet. The wallet data is still loading. Respond with exactly: "I can see your wallet is loading — try again in a moment."`;
   }
 
-  const recentUsageTxns = wallet.transactions
-    .filter(t => t.type === "usage")
-    .slice(0, 5)
-    .map(t => ({ label: t.label, amount: Math.abs(t.amount).toFixed(4), provider: t.provider }));
+  return `You are an AI spending assistant built into AI Wallet. You ONLY answer questions about the user's AI API costs, wallet balance, transactions, and spending optimization. You have NO knowledge of personal finances, banking, or budgeting.
 
-  const recentOptimizations = wallet.transactions
-    .filter(t => t.type === "optimization")
-    .slice(0, 3)
-    .map(t => ({ label: t.label, saved: Math.abs(t.amount).toFixed(4) }));
+Current wallet data:
+- Balance: $${wallet.balance.toFixed(2)}
+- Total saved: $${wallet.totalSaved.toFixed(2)}
+- Spend mode: ${wallet.spendMode}
+- Recent transactions: ${JSON.stringify(wallet.transactions.slice(0, 5))}
+- Avg cost per request: $${data.avgCost.toFixed(4)}
+- Total requests: ${data.totalRequests}
 
-  const walletState = {
-    balance:           wallet.balance.toFixed(4),
-    totalSaved:        wallet.totalSaved.toFixed(4),
-    spendMode:         wallet.spendMode,
-    recentSpend:       wallet.transactions.filter(t => t.type === "usage").reduce((s, t) => s + Math.abs(t.amount), 0).toFixed(4),
-    optimizationCount: wallet.transactions.filter(t => t.type === "optimization").length,
-    recentUsage:       recentUsageTxns,
-    recentSavings:     recentOptimizations,
-  };
+Keep ALL responses under 3 sentences. Be specific and reference the actual numbers above. If asked anything unrelated to AI API spending, say: 'I only handle AI spending insights. Try asking: what is my balance? or how can I reduce my AI costs?'
 
-  const usageState = {
-    totalRequests:  data.totalRequests,
-    avgCostPerCall: `$${data.avgCost.toFixed(4)}`,
-    savingsPercent: `${data.savingsPercent}%`,
-    totalSpend:     `$${data.totalSpend.toFixed(4)}`,
-    autopilotSaved: `$${data.autopilotSaved.toFixed(4)}`,
-    topTool:        data.topTool,
-  };
-
-  return `You are an AI API spending assistant embedded in AI Wallet. You have ONE job: help the user understand and reduce their AI API costs.
-
-STRICT RULES:
-1. ONLY answer questions about AI API costs, wallet balance, spending patterns, model selection, and cost optimization.
-2. If the user asks ANYTHING unrelated to AI spending (weather, coding help, general advice, etc.), respond with EXACTLY: "I'm your AI spending assistant — I can only help with your API costs and wallet. Try asking: how much am I spending? or what's my efficiency score?"
-3. Keep every response to 2-3 sentences max. No lists, no preamble.
-4. Always reference the real numbers below when answering.
-
-USER'S LIVE WALLET DATA:
-${JSON.stringify(walletState, null, 2)}
-
-USER'S LIVE USAGE STATS:
-${JSON.stringify(usageState, null, 2)}
-
-ACTIONS (only emit when user directly requests the action):
-- To run optimization: prepend {"action":"optimize"} then one sentence confirming.
-- To switch mode: prepend {"action":"mode","value":"saver"|"balanced"|"performance"} then one sentence confirming.
-Never emit an action block unless the user explicitly asks to optimize or switch modes.`;
+ACTIONS (only emit when user explicitly requests):
+- Optimize spend: prepend {"action":"optimize"} then one sentence.
+- Switch mode: prepend {"action":"mode","value":"saver"|"balanced"|"performance"} then one sentence.`;
 }
 
 function parseAction(raw: string): { action: string; value?: string } | null {
@@ -1359,7 +1325,9 @@ function AgentChat({ wallet, data, onOptimize, onModeSwitch }: AgentChatProps) {
           provider: "gemini",
           model: "gemini-1.5-flash",
           messages: [
-            { role: "system", content: buildSystemPrompt(wallet, data) },
+            // Gemini doesn't support role:"system" — inject context as first user/assistant turn
+            { role: "user",      content: buildSystemPrompt(wallet, data) },
+            { role: "assistant", content: "Understood. I'm your AI spending assistant and I have your current wallet data loaded. I'll only discuss your AI API costs." },
             ...history,
             { role: "user", content: trimmed },
           ],
