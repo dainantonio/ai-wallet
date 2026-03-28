@@ -12,6 +12,7 @@ const Usage     = lazy(() => import("@/pages/usage"));
 const Alerts    = lazy(() => import("@/pages/alerts"));
 const Autopilot = lazy(() => import("@/pages/autopilot"));
 const Simulator = lazy(() => import("@/pages/simulator"));
+const Settings  = lazy(() => import("@/pages/settings"));
 const NotFound  = lazy(() => import("@/pages/not-found"));
 
 // ─── Auth context (shared across pages / Shell) ───────────────────────────────
@@ -43,6 +44,7 @@ function Router() {
         <Route path="/alerts" component={Alerts} />
         <Route path="/autopilot" component={Autopilot} />
         <Route path="/simulator" component={Simulator} />
+        <Route path="/settings"  component={Settings}  />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

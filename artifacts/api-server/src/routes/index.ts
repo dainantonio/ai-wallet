@@ -5,6 +5,7 @@ import authRouter from "./auth";
 import walletRouter from "./wallet";
 import costsRouter from "./costs";
 import proxyRouter from "./proxy";
+import settingsRouter from "./settings";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(walletRouter);
 router.use(usageRouter);
 router.use(costsRouter);
 router.use(proxyRouter);
+router.use(settingsRouter);
 
 export default router;

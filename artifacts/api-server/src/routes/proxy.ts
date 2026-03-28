@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 import { db, costLogsTable } from "@workspace/db";
+import { getUserApiKey } from "./settings";
 
 const router: IRouter = Router();
 
@@ -74,12 +75,13 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
   try {
     // ── OpenAI ──────────────────────────────────────────────────────────────
     if (provider === "openai") {
-      if (!process.env.OPENAI_API_KEY) {
+      const apiKey = (await getUserApiKey(resolvedUserId, "openai")) ?? process.env.OPENAI_API_KEY;
+      if (!apiKey) {
         res.status(400).json({ error: "Provider not configured" });
         return;
       }
 
-      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const client = new OpenAI({ apiKey });
       const completion = await client.chat.completions.create({
         model: resolvedModel,
         messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
@@ -98,12 +100,13 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
 
     // ── Anthropic ───────────────────────────────────────────────────────────
     if (provider === "anthropic") {
-      if (!process.env.ANTHROPIC_API_KEY) {
+      const apiKey = (await getUserApiKey(resolvedUserId, "anthropic")) ?? process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
         res.status(400).json({ error: "Provider not configured" });
         return;
       }
 
-      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const client = new Anthropic({ apiKey });
 
       const systemMsg = messages.find((m) => m.role === "system")?.content;
       const chatMsgs  = messages
@@ -131,12 +134,13 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
 
     // ── Gemini ──────────────────────────────────────────────────────────────
     if (provider === "gemini") {
-      if (!process.env.GEMINI_API_KEY) {
+      const apiKey = (await getUserApiKey(resolvedUserId, "google")) ?? process.env.GEMINI_API_KEY;
+      if (!apiKey) {
         res.status(400).json({ error: "Provider not configured" });
         return;
       }
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
 
       const contents = messages
         .filter((m) => m.role !== "system")
