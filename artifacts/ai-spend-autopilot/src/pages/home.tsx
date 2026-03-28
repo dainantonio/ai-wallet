@@ -971,41 +971,59 @@ const QUICK_PROMPTS = [
 ];
 
 function buildSystemPrompt(wallet: WalletState | null, data: UsageData): string {
-  const walletCtx = wallet ? {
-    balance:     wallet.balance,
-    totalSaved:  wallet.totalSaved,
-    spendMode:   wallet.spendMode,
-    recentSpend: wallet.transactions
-      .filter(t => t.type === "usage")
-      .reduce((s, t) => s + Math.abs(t.amount), 0)
-      .toFixed(4),
-    optimizationCount: wallet.transactions.filter(t => t.type === "optimization").length,
-  } : null;
+  if (!wallet) {
+    return `You are an AI spending assistant for AI Wallet. The user's wallet data is still loading.
+For every message, respond with exactly: "I can see your wallet is loading — try again in a moment."
+Do not answer any other questions until wallet data is available.`;
+  }
 
-  const usageCtx = {
+  const recentUsageTxns = wallet.transactions
+    .filter(t => t.type === "usage")
+    .slice(0, 5)
+    .map(t => ({ label: t.label, amount: Math.abs(t.amount).toFixed(4), provider: t.provider }));
+
+  const recentOptimizations = wallet.transactions
+    .filter(t => t.type === "optimization")
+    .slice(0, 3)
+    .map(t => ({ label: t.label, saved: Math.abs(t.amount).toFixed(4) }));
+
+  const walletState = {
+    balance:           wallet.balance.toFixed(4),
+    totalSaved:        wallet.totalSaved.toFixed(4),
+    spendMode:         wallet.spendMode,
+    recentSpend:       wallet.transactions.filter(t => t.type === "usage").reduce((s, t) => s + Math.abs(t.amount), 0).toFixed(4),
+    optimizationCount: wallet.transactions.filter(t => t.type === "optimization").length,
+    recentUsage:       recentUsageTxns,
+    recentSavings:     recentOptimizations,
+  };
+
+  const usageState = {
     totalRequests:  data.totalRequests,
-    avgCost:        data.avgCost,
-    savingsPercent: data.savingsPercent,
-    totalSpend:     data.totalSpend,
-    autopilotSaved: data.autopilotSaved,
+    avgCostPerCall: `$${data.avgCost.toFixed(4)}`,
+    savingsPercent: `${data.savingsPercent}%`,
+    totalSpend:     `$${data.totalSpend.toFixed(4)}`,
+    autopilotSaved: `$${data.autopilotSaved.toFixed(4)}`,
     topTool:        data.topTool,
   };
 
-  return `You are an AI spending assistant for AI Wallet. Help users understand and optimize their AI API costs. Keep every response to 2-3 sentences max. Be direct and actionable.
+  return `You are an AI API spending assistant embedded in AI Wallet. You have ONE job: help the user understand and reduce their AI API costs.
 
-Current wallet: ${JSON.stringify(walletCtx)}
-Current usage: ${JSON.stringify(usageCtx)}
+STRICT RULES:
+1. ONLY answer questions about AI API costs, wallet balance, spending patterns, model selection, and cost optimization.
+2. If the user asks ANYTHING unrelated to AI spending (weather, coding help, general advice, etc.), respond with EXACTLY: "I'm your AI spending assistant — I can only help with your API costs and wallet. Try asking: how much am I spending? or what's my efficiency score?"
+3. Keep every response to 2-3 sentences max. No lists, no preamble.
+4. Always reference the real numbers below when answering.
 
-When the user explicitly asks you to perform an action, prepend a JSON action block to your reply like:
-{"action":"optimize"}
-I'm running an optimization now — this should surface some savings!
+USER'S LIVE WALLET DATA:
+${JSON.stringify(walletState, null, 2)}
 
-Or for mode switch:
-{"action":"mode","value":"saver"}
-Switched to Saver Mode — routes ~50% of calls to cheaper models.
+USER'S LIVE USAGE STATS:
+${JSON.stringify(usageState, null, 2)}
 
-Valid actions: optimize | mode (value: saver | balanced | performance).
-Only emit an action block when the user directly requests that action.`;
+ACTIONS (only emit when user directly requests the action):
+- To run optimization: prepend {"action":"optimize"} then one sentence confirming.
+- To switch mode: prepend {"action":"mode","value":"saver"|"balanced"|"performance"} then one sentence confirming.
+Never emit an action block unless the user explicitly asks to optimize or switch modes.`;
 }
 
 function parseAction(raw: string): { action: string; value?: string } | null {
