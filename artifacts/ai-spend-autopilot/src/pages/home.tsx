@@ -714,6 +714,177 @@ function CostPreviewPanel({ avgCost }: { avgCost: number }) {
   );
 }
 
+// ─── Hero Cost Estimator (horizontal pill layout) ────────────────────────────
+function HeroCostEstimator({ avgCost }: { avgCost: number }) {
+  const [text, setText]                     = useState("");
+  const [debounced, setDebounced]           = useState("");
+  const [optimizing, setOptimizing]         = useState(false);
+  const [optimizeResult, setOptimizeResult] = useState<OptimizeResult | null>(null);
+  const [optimizeError, setOptimizeError]   = useState<string | null>(null);
+  const [copied, setCopied]                 = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(text), 300);
+    return () => clearTimeout(t);
+  }, [text]);
+
+  useEffect(() => { setOptimizeResult(null); setOptimizeError(null); }, [text]);
+
+  const estimates    = useMemo(() => estimatePromptCosts(debounced), [debounced]);
+  const cheapest     = estimates?.[0];
+  const priciest     = estimates?.[estimates.length - 1];
+  const hasSavings   = cheapest && priciest && cheapest.provider !== priciest.provider;
+  const savings      = hasSavings ? priciest!.cost - cheapest!.cost : 0;
+
+  const optEstimates  = useMemo(() => optimizeResult ? estimatePromptCosts(optimizeResult.optimizedText) : null, [optimizeResult]);
+  const origTokens    = estimates?.[0]?.inputTokens ?? 0;
+  const newTokens     = optEstimates?.[0]?.inputTokens ?? 0;
+  const origOpenAi    = estimates?.find(e => e.provider === "OpenAI")?.cost ?? 0;
+  const newOpenAi     = optEstimates?.find(e => e.provider === "OpenAI")?.cost ?? 0;
+  const costSaved     = Math.max(0, origOpenAi - newOpenAi);
+
+  const handleOptimize = async () => {
+    if (!text.trim() || optimizing) return;
+    setOptimizing(true); setOptimizeError(null); setOptimizeResult(null);
+    try {
+      const res = await fetch("/api/proxy/chat", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "gemini", model: "gemini-2.5-flash",
+          messages: [{ role: "user", content: `Shorten this prompt to use fewer tokens while keeping the same meaning. Return only the shortened prompt, nothing else: ${text}` }],
+          taskLabel: "Prompt optimization",
+        }),
+      });
+      const data = await res.json() as { content?: string; usage?: { input_tokens: number; output_tokens: number }; cost?: number; error?: string };
+      if (!res.ok || data.error) setOptimizeError(data.error ?? "Optimization failed");
+      else setOptimizeResult({ optimizedText: data.content ?? "", actualCost: data.cost ?? 0, actualInputTokens: data.usage?.input_tokens ?? 0, actualOutputTokens: data.usage?.output_tokens ?? 0 });
+    } catch { setOptimizeError("Network error — could not reach the server"); }
+    finally { setOptimizing(false); }
+  };
+
+  const handleCopy = async () => {
+    if (!optimizeResult?.optimizedText) return;
+    await navigator.clipboard.writeText(optimizeResult.optimizedText);
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <MessageSquare className="w-4 h-4 text-white/50" />
+        <p className="text-sm font-semibold text-white/70">Estimate prompt cost</p>
+        <span className="ml-auto text-[10px] font-bold text-white/30 bg-white/[0.06] border border-white/10 px-2 py-0.5 rounded-full">
+          client-side · no API calls
+        </span>
+      </div>
+
+      <textarea
+        value={text}
+        onChange={e => setText(e.target.value)}
+        placeholder="Type or paste a prompt to compare costs across providers…"
+        rows={3}
+        className="w-full bg-white/[0.06] border border-white/[0.10] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/40 resize-none transition-all duration-200"
+      />
+
+      {/* Horizontal provider pills */}
+      <AnimatePresence>
+        {estimates && (
+          <motion.div key="pills"
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }}
+            className="flex gap-2 mt-3 flex-wrap items-center">
+            {estimates.map((e, i) => {
+              const isCheapest = i === 0;
+              const provColor = PROVIDER_COLOR[e.provider]?.split(" ")[0] ?? "text-white/80";
+              return (
+                <div key={e.provider}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+                    isCheapest ? "bg-emerald-400/15 border-emerald-400/40 text-emerald-300" : "bg-white/[0.06] border-white/[0.10] text-white/60"
+                  }`}>
+                  <span className={`font-bold ${provColor}`}>{e.provider}</span>
+                  <span className="font-mono">{fmtCost(e.cost)}</span>
+                  {isCheapest && <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-wide">cheapest</span>}
+                </div>
+              );
+            })}
+            {hasSavings && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-400/10 border border-amber-400/25 text-xs text-amber-300 font-semibold">
+                <Lightbulb className="w-3 h-3" />
+                Save {fmtCost(savings)} vs {priciest!.provider}
+              </div>
+            )}
+            <span className="text-[10px] text-white/30 pl-1">~{estimates[0].inputTokens} tokens</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Optimize button */}
+      <AnimatePresence>
+        {text.trim().length > 0 && (
+          <motion.div key="opt-btn"
+            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.18 }}
+            className="overflow-hidden mt-3">
+            <motion.button onClick={handleOptimize} disabled={optimizing}
+              whileTap={{ scale: 0.97 }} whileHover={{ scale: 1.01 }}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-violet-500/20 border border-violet-500/35 hover:bg-violet-500/28 text-sm font-bold text-violet-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+              {optimizing ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" />Optimizing…</> : <><Sparkles className="w-3.5 h-3.5" />Optimize Prompt</>}
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Error */}
+      <AnimatePresence>
+        {optimizeError && (
+          <motion.div key="err" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="mt-3 flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/25">
+            <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-400">{optimizeError}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Optimized result */}
+      <AnimatePresence>
+        {optimizeResult && (
+          <motion.div key="result"
+            initial={{ opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28 }}
+            className="mt-3 rounded-xl border border-violet-500/25 bg-violet-500/8 overflow-hidden">
+            <div className="flex items-center justify-between px-3.5 pt-3 pb-2.5 border-b border-violet-500/15">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+                <p className="text-xs font-bold text-violet-300">Optimized Prompt</p>
+              </div>
+              <div className="flex items-center gap-1 text-[10px] font-mono">
+                <span className="line-through text-white/30">{origTokens}t</span>
+                <ChevronRight className="w-3 h-3 text-white/20" />
+                <span className="text-emerald-400 font-bold">{newTokens}t</span>
+              </div>
+            </div>
+            <p className="px-3.5 py-3 text-xs text-white/80 leading-relaxed whitespace-pre-wrap">{optimizeResult.optimizedText}</p>
+            <div className="flex items-center justify-between px-3.5 pb-3 pt-2 border-t border-violet-500/15 gap-3 flex-wrap">
+              <div>
+                <p className="text-[10px] text-white/40 mb-0.5">Saves on OpenAI</p>
+                <p className="text-sm font-bold font-mono text-emerald-400">{costSaved > 0 ? `~${fmtCost(costSaved)}` : "—"}</p>
+              </div>
+              <motion.button onClick={handleCopy} whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/20 border border-violet-500/30 hover:bg-violet-500/30 text-xs font-bold transition-colors">
+                {copied
+                  ? <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /><span className="text-emerald-400">Copied!</span></>
+                  : <><Copy className="w-3.5 h-3.5 text-violet-300" /><span className="text-violet-300">Use this prompt</span></>
+                }
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ─── Intelligence Feed ────────────────────────────────────────────────────────
 
 type InsightLevel = "info" | "warning" | "savings";
@@ -2110,6 +2281,30 @@ function HomeInner({ data }: { data: UsageData }) {
     return { spentToday, avgCost, topProvider };
   }, [transactions]);
 
+  // ── Provider cost totals for breakdown gauges ────────────────────────────
+  const providerTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    transactions.filter(t => t.type === "usage").forEach(t => {
+      if (t.provider && t.provider !== "AI Wallet" && t.provider !== "Wallet") {
+        totals[t.provider] = (totals[t.provider] ?? 0) + Math.abs(t.amount);
+      }
+    });
+    return totals;
+  }, [transactions]);
+  const totalProviderSpend = Object.values(providerTotals).reduce((s, v) => s + v, 0);
+
+  // ── Intelligence feed at HomeInner level ─────────────────────────────────
+  const [insightRefreshTs, setInsightRefreshTs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setInsightRefreshTs(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const homeInsights = useMemo(
+    () => buildInsights(transactions, data.avgCost, totalSaved, insightRefreshTs),
+    [transactions, data.avgCost, totalSaved, insightRefreshTs],
+  );
+  const [insightsExpanded, setInsightsExpanded] = useState(false);
+
   if (walletLoading) {
     return (
       <Shell>
@@ -2120,56 +2315,42 @@ function HomeInner({ data }: { data: UsageData }) {
     );
   }
 
+  const PROVIDER_BAR: Record<string, string> = { OpenAI: "bg-blue-400", Anthropic: "bg-orange-400", Gemini: "bg-green-400" };
+
   return (
     <Shell>
-      {/* ── Demo Mode Banner ── */}
+      {/* ── Demo Banner ── */}
       {isDemo && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-amber-400/30 bg-amber-400/8 mb-5"
-        >
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-amber-400/30 bg-amber-400/8 mb-5">
           <div className="flex items-center gap-2.5">
             <FlaskConical className="w-4 h-4 text-amber-400 flex-shrink-0" />
             <p className="text-sm font-medium text-amber-300">
               You are in <span className="font-bold">Demo Mode</span> — data is not saved
             </p>
           </div>
-          <button
-            onClick={logout}
-            className="text-xs font-semibold text-amber-400 hover:text-amber-300 border border-amber-400/40 hover:border-amber-400/70 px-2.5 py-1 rounded-lg transition-colors flex-shrink-0"
-          >
+          <button onClick={logout}
+            className="text-xs font-semibold text-amber-400 hover:text-amber-300 border border-amber-400/40 hover:border-amber-400/70 px-2.5 py-1 rounded-lg transition-colors flex-shrink-0">
             Exit Demo
           </button>
         </motion.div>
       )}
 
-      <header className="mb-6">
-        <motion.h1 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-          className="text-3xl md:text-5xl font-display font-black tracking-tight heading-gradient">
-          {displayName}
-        </motion.h1>
-        <motion.p initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
-          className="text-muted-foreground mt-1.5 text-sm">
-          Your AI spending, optimized and in control.
-        </motion.p>
-      </header>
+      {/* ════════════════════════════════════════════════════════════════════
+          LAYER 1 — HERO
+          ════════════════════════════════════════════════════════════════════ */}
+      {/* ── Hero Card ── */}
 
-      {/* ── Wallet Card ── */}
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.45 }}
-        className="relative rounded-3xl overflow-hidden mb-5"
+        className="relative rounded-3xl overflow-hidden mb-6"
         style={{ background: "linear-gradient(135deg, #13111f 0%, #1e1b4b 20%, #2d2369 45%, #1a1740 70%, #0a0818 100%)" }}
       >
-        {/* Top highlight line */}
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
-
-        {/* Ambient glows */}
         <div className="absolute top-0 left-0 w-72 h-72 bg-indigo-500/25 rounded-full blur-[90px] -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
         <div className="absolute bottom-0 right-0 w-64 h-64 bg-primary/30 rounded-full blur-[70px] translate-x-1/3 translate-y-1/3 pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-br from-white/6 via-transparent to-white/2 pointer-events-none" />
-
-        {/* Shimmer sweep */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="card-shine-inner absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-white/6 to-transparent" />
         </div>
@@ -2181,267 +2362,153 @@ function HomeInner({ data }: { data: UsageData }) {
                 <CreditCard className="w-[18px] h-[18px] text-white/80" />
               </div>
               <div>
-                <span className="text-xs font-bold tracking-widest text-white/45 uppercase block">AI Spend Wallet</span>
+                <span className="text-xs font-bold tracking-widest text-white/45 uppercase block">{displayName}</span>
                 <span className="text-[10px] font-mono text-white/25 tracking-widest">•••• •••• •••• 4721</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${activeMode.color}`}>
-                {activeMode.label} Mode
-              </span>
-              <Wallet className="w-5 h-5 text-white/25" />
+              <motion.button onClick={handleRunTask} disabled={isRunningTask}
+                whileTap={{ scale: 0.94 }} whileHover={{ scale: 1.05 }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-400/15 border border-orange-400/30 text-orange-300 text-xs font-bold disabled:opacity-50 transition-colors hover:bg-orange-400/22">
+                {isRunningTask ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                Run Task
+              </motion.button>
+              <div className="relative">
+                <motion.button onClick={() => setShowFundsMenu(v => !v)} disabled={isAddingFunds}
+                  whileTap={{ scale: 0.94 }} whileHover={{ scale: 1.05 }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-400/15 border border-emerald-400/30 text-emerald-300 text-xs font-bold disabled:opacity-50 transition-colors hover:bg-emerald-400/22">
+                  {isAddingFunds ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                  +${fundsAmt}
+                </motion.button>
+                <AnimatePresence>
+                  {showFundsMenu && (
+                    <motion.div initial={{ opacity: 0, y: 6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                      className="absolute top-full right-0 mt-2 z-30 rounded-xl border border-border/50 bg-card shadow-xl p-2 flex flex-col gap-1 min-w-[80px]">
+                      {FUNDS_OPTIONS.map(amt => (
+                        <button key={amt} onClick={() => { setFundsAmt(amt); handleAddFunds(amt); }}
+                          className={`text-sm font-semibold px-3 py-2 rounded-lg transition-colors text-left ${fundsAmt === amt ? "bg-emerald-400/20 text-emerald-400" : "hover:bg-secondary text-foreground"}`}>
+                          +${amt}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <motion.button onClick={handleOptimize} disabled={isOptimizing}
+                whileTap={{ scale: 0.94 }} whileHover={{ scale: 1.05 }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-400/15 border border-violet-400/30 text-violet-300 text-xs font-bold disabled:opacity-50 transition-colors hover:bg-violet-400/22">
+                {isOptimizing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                Optimize
+              </motion.button>
             </div>
           </div>
 
-          {/* Balance */}
-          <div className="mb-8">
-            <p className="text-xs text-white/40 mb-1.5 font-semibold tracking-widest uppercase">Balance</p>
-            <motion.div
-              key={balance}
-              initial={{ scale: 1.03 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 0.35, ease: "easeOut" }}
-              className="relative inline-block"
-            >
-              {/* Flash ring */}
+          <div className="text-center mb-7">
+            <p className="text-xs text-white/40 mb-2 font-semibold tracking-widest uppercase">Balance</p>
+            <motion.div key={balance} initial={{ scale: 1.03 }} animate={{ scale: 1 }} transition={{ duration: 0.35, ease: "easeOut" }}
+              className="relative inline-block">
               <AnimatePresence>
                 {balanceFlash && (
-                  <motion.div
-                    key={balanceFlash}
-                    initial={{ opacity: 0.9, scale: 0.93 }}
-                    animate={{ opacity: 0, scale: 1.2 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.65 }}
-                    className={`absolute inset-0 rounded-xl pointer-events-none ${balanceFlash === "up" ? "bg-emerald-400/25" : "bg-red-400/25"}`}
-                  />
+                  <motion.div key={balanceFlash} initial={{ opacity: 0.9, scale: 0.93 }} animate={{ opacity: 0, scale: 1.2 }}
+                    exit={{ opacity: 0 }} transition={{ duration: 0.65 }}
+                    className={`absolute inset-0 rounded-xl pointer-events-none ${balanceFlash === "up" ? "bg-emerald-400/25" : "bg-red-400/25"}`} />
                 )}
               </AnimatePresence>
-              <div className={`text-5xl md:text-6xl font-mono font-black tracking-tight transition-colors duration-300 ${
+              <div className={`text-6xl md:text-7xl font-mono font-black tracking-tight transition-colors duration-300 ${
                 balanceFlash === "up" ? "text-emerald-300" : balanceFlash === "down" ? "text-red-300" : "text-white"
               }`}>
                 $<AnimatedNumber value={balance} decimals={2} />
               </div>
             </motion.div>
-            <p className="text-xs text-white/35 mt-1.5 font-medium tracking-wide">this month's spend</p>
-          </div>
-
-          <div className="flex flex-wrap gap-x-6 gap-y-3 pt-5 border-t border-white/10 items-end">
-            <div>
-              <p className="text-[10px] text-white/40 mb-0.5 font-medium uppercase tracking-wider">Available Budget</p>
-              <p className="text-xl font-bold text-white">${Math.max(0, budget - balance).toFixed(1)}</p>
-            </div>
-            <div className="w-px bg-white/10 self-stretch hidden sm:block" />
-            <div>
-              <p className="text-[10px] text-white/40 mb-0.5 font-medium uppercase tracking-wider">Total Saved</p>
-              <motion.p
-                animate={savingsGlow
-                  ? { textShadow: "0 0 14px rgba(52,211,153,0.9), 0 0 28px rgba(52,211,153,0.4)" }
-                  : { textShadow: "none" }
-                }
-                transition={{ duration: 0.4 }}
-                className="text-xl font-bold text-emerald-400"
-              >
-                +$<AnimatedNumber value={totalSaved} decimals={2} />
-              </motion.p>
+            <p className="text-sm text-white/35 mt-2 font-medium">this month's spend</p>
+            <motion.p
+              animate={savingsGlow ? { textShadow: "0 0 14px rgba(52,211,153,0.9)" } : { textShadow: "none" }}
+              transition={{ duration: 0.4 }}
+              className="text-sm font-semibold text-emerald-400 mt-1">
+              +$<AnimatedNumber value={totalSaved} decimals={2} /> saved
               <AnimatePresence>
                 {savingsGlow && (
-                  <motion.p
-                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.25 }}
-                    className="text-[10px] text-emerald-400 font-semibold mt-0.5"
-                  >
-                    ↑ savings updated
-                  </motion.p>
+                  <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className="ml-2 text-xs">updated</motion.span>
                 )}
               </AnimatePresence>
-            </div>
-            <div className="w-px bg-white/10 self-stretch hidden sm:block" />
-            <div>
-              <p className="text-[10px] text-white/40 mb-0.5 font-medium uppercase tracking-wider">Smart Spend</p>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                <p className="text-sm font-semibold text-emerald-400">Active</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ── Quick Actions ── */}
-      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
-        className="mb-5">
-        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.15em] mb-3">Quick Actions</p>
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          {/* Run AI Task */}
-          <ActionBtn
-            icon={<Play className="w-4 h-4" />}
-            label="Run AI Task"
-            desc="Simulate API call"
-            loading={isRunningTask}
-            accent="text-orange-400"
-            border="border-orange-400/25"
-            bg="bg-orange-400/6 hover:bg-orange-400/12"
-            iconBg="bg-orange-400/15"
-            onClick={handleRunTask}
-          />
-
-          {/* Add Funds */}
-          <div className="relative">
-            <ActionBtn
-              icon={<Plus className="w-4 h-4" />}
-              label="Add Funds"
-              desc={`+$${fundsAmt} top-up`}
-              loading={isAddingFunds}
-              accent="text-emerald-400"
-              border="border-emerald-400/25"
-              bg="bg-emerald-400/6 hover:bg-emerald-400/12"
-              iconBg="bg-emerald-400/15"
-              badge={`$${fundsAmt}`}
-              onClick={() => setShowFundsMenu(v => !v)}
-            />
-            {/* Amount picker */}
-            <AnimatePresence>
-              {showFundsMenu && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                  className="absolute top-full left-0 right-0 mt-2 z-30 rounded-xl border border-border/50 bg-card shadow-xl backdrop-blur-sm p-2 flex flex-col gap-1"
-                >
-                  {FUNDS_OPTIONS.map(amt => (
-                    <button key={amt}
-                      onClick={() => { setFundsAmt(amt); handleAddFunds(amt); }}
-                      className={`text-sm font-semibold px-3 py-2 rounded-lg transition-colors text-left ${
-                        fundsAmt === amt
-                          ? "bg-emerald-400/20 text-emerald-400"
-                          : "hover:bg-secondary text-foreground"
-                      }`}>
-                      +${amt}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+            </motion.p>
           </div>
 
-          {/* Optimize Spend */}
-          <ActionBtn
-            icon={<Zap className="w-4 h-4" />}
-            label="Optimize Spend"
-            desc="Find savings now"
-            loading={isOptimizing}
-            accent="text-violet-400"
-            border="border-violet-400/25"
-            bg="bg-violet-400/6 hover:bg-violet-400/12"
-            iconBg="bg-violet-400/15"
-            onClick={handleOptimize}
-          />
-        </div>
-      </motion.div>
-
-      {/* ── Savings Tip Banner ── */}
-      <AnimatePresence>
-        {savingsTip && (
-          <motion.div
-            key="savings-tip"
-            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-            animate={{ opacity: 1, height: "auto", marginBottom: 20 }}
-            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-            className="overflow-hidden"
-          >
-            <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-400/30 bg-amber-400/8">
-              <div className="w-8 h-8 rounded-xl bg-amber-400/15 flex items-center justify-center flex-shrink-0 text-amber-400 mt-0.5">
-                <Lightbulb className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-amber-400 uppercase tracking-wide mb-1">Savings Tip</p>
-                <p className="text-sm text-foreground leading-relaxed">{savingsTip}</p>
-              </div>
-              <button onClick={() => setSavingsTip(null)}
-                className="flex-shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Live Cost Preview ── */}
-      <CostPreviewPanel avgCost={data.avgCost} />
-
-      {/* ── Spend Mode Selector ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.17 }}
-        className="glass-panel rounded-2xl p-5 mb-6"
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <Sparkles className="w-4 h-4 text-muted-foreground" />
-          <p className="text-sm font-semibold text-foreground">Spend Mode</p>
-          <span className="text-[11px] text-muted-foreground/70">— affects routing &amp; savings projection</span>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          {MODES.map((mode) => {
-            const active = spendMode === mode.id;
-            return (
-              <motion.button key={mode.id} onClick={() => handleModeSwitch(mode.id)}
-                whileTap={{ scale: 0.96 }}
-                className={`relative rounded-xl border p-3 text-left transition-all duration-200 ${
-                  active ? mode.color : "border-border/40 bg-secondary/30 text-muted-foreground hover:border-border hover:bg-secondary/60"
-                }`}>
-                {active && (
-                  <motion.div layoutId="mode-active"
-                    className="absolute inset-0 rounded-xl border-2 border-current opacity-25"
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }} />
-                )}
-                <div className="flex items-center gap-2 mb-1">
+          <div className="flex rounded-2xl bg-white/[0.06] border border-white/[0.08] p-1 mb-7">
+            {MODES.map(mode => {
+              const active = spendMode === mode.id;
+              return (
+                <motion.button key={mode.id} onClick={() => handleModeSwitch(mode.id)} whileTap={{ scale: 0.96 }}
+                  className={`relative flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
+                    active
+                      ? mode.id === "saver"       ? "bg-emerald-400/20 text-emerald-300 shadow-lg"
+                      : mode.id === "performance" ? "bg-orange-400/20 text-orange-300 shadow-lg"
+                      :                             "bg-primary/20 text-primary shadow-lg"
+                      : "text-white/40 hover:text-white/70"
+                  }`}>
+                  {active && (
+                    <motion.div layoutId="hero-mode-active"
+                      className="absolute inset-0 rounded-xl border border-current opacity-30"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }} />
+                  )}
                   {mode.icon}
-                  <span className="text-sm font-bold">{mode.label}</span>
-                </div>
-                <p className="text-xs opacity-70 leading-snug">{mode.desc}</p>
-                {active && mode.switchPct > 0 && (
-                  <p className="text-xs font-semibold mt-2 flex items-center gap-1">
-                    <ChevronRight className="w-3 h-3" />Routing {Math.round(mode.switchPct * 100)}% to mini
+                  <span>{mode.label}</span>
+                </motion.button>
+              );
+            })}
+          </div>
+
+          {isSimulated && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+              transition={{ duration: 0.25 }}
+              className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-7 overflow-hidden">
+              {[
+                { label: "Projected Spend",   value: formatCurrency(projSpend),   delta: `-${formatCurrency(extraSaved)}` },
+                { label: "Total Saved",        value: formatCurrency(projSavings), delta: `+${formatCurrency(extraSaved)}` },
+                { label: "Savings Rate",       value: `${projSavePct}%`,           delta: `+${(projSavePct - data.savingsPercent).toFixed(1)}%` },
+                { label: "Re-routed Requests", value: formatNumber(switched),      delta: "to mini" },
+              ].map(item => (
+                <div key={item.label} className="bg-white/[0.05] rounded-xl px-3 py-2.5">
+                  <p className="text-[10px] text-white/40 mb-1 font-medium">{item.label}</p>
+                  <p className="text-sm font-bold text-white">{item.value}</p>
+                  <p className="text-[10px] text-emerald-400 mt-0.5 flex items-center gap-0.5">
+                    <ChevronRight className="w-3 h-3" />{item.delta}
                   </p>
-                )}
-              </motion.button>
-            );
-          })}
+                </div>
+              ))}
+            </motion.div>
+          )}
+
+          <HeroCostEstimator avgCost={data.avgCost} />
         </div>
 
-        {isSimulated && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-            transition={{ duration: 0.25 }}
-            className="mt-4 pt-4 border-t border-border/40 grid grid-cols-2 md:grid-cols-4 gap-2 overflow-hidden">
-            {[
-              { label: "Projected Balance",  value: formatCurrency(projSpend),   delta: `-${formatCurrency(extraSaved)}` },
-              { label: "Total Saved",        value: formatCurrency(projSavings), delta: `+${formatCurrency(extraSaved)}` },
-              { label: "Savings Rate",       value: `${projSavePct}%`,           delta: `+${(projSavePct - data.savingsPercent).toFixed(1)}%` },
-              { label: "Requests Re-routed", value: formatNumber(switched),      delta: "to mini" },
-            ].map(item => (
-              <div key={item.label} className="bg-primary/6 rounded-xl px-3 py-2.5">
-                <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
-                <p className="text-sm font-bold text-foreground">{item.value}</p>
-                <p className="text-xs text-success mt-0.5 flex items-center gap-0.5">
-                  <ChevronRight className="w-3 h-3" />{item.delta}
-                </p>
+        <AnimatePresence>
+          {savingsTip && (
+            <motion.div key="tip" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.28 }}
+              className="border-t border-white/[0.08] overflow-hidden">
+              <div className="flex items-start gap-3 px-6 md:px-8 py-4">
+                <Lightbulb className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-amber-300 flex-1 leading-relaxed">{savingsTip}</p>
+                <button onClick={() => setSavingsTip(null)} className="text-white/30 hover:text-white/70 transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
-            ))}
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
 
-      {/* ── Stats Grid ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard delay={0.2} title="Available Credits"
-          value={`$${(data.credits + (isSimulated ? extraSaved : 0)).toFixed(1)}`}
-          icon={<Wallet className="w-4 h-4" />} className="stat-card-premium" />
-        <StatCard delay={0.3} title="Avg Cost / Request"
-          value={`$${isSimulated ? (projSpend / data.totalRequests).toFixed(3) : data.avgCost.toFixed(3)}`}
-          trend={{ value: isSimulated ? `-${(((data.avgCost - projSpend / data.totalRequests) / data.avgCost) * 100).toFixed(1)}%` : "-4.2%", isPositive: true }}
-          className="stat-card-premium" />
-        <StatCard delay={0.4} title="Top Tool" value={data.topTool}
-          icon={<BrainCircuit className="w-4 h-4" />} className="stat-card-premium whitespace-nowrap overflow-hidden text-ellipsis" />
+      {/* LAYER 2 — COMMAND CENTER */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard delay={0.1} title="Total Spend" value={`$${balance.toFixed(2)}`}
+          icon={<CreditCard className="w-4 h-4" />} className="stat-card-premium" />
+        <StatCard delay={0.15} title="Total Saved" value={`$${totalSaved.toFixed(2)}`}
+          icon={<TrendingDown className="w-4 h-4" />} className="stat-card-premium" />
+        <StatCard delay={0.2} title="Requests" value={formatNumber(data.totalRequests)}
+          icon={<Zap className="w-4 h-4" />} className="stat-card-premium" />
         <EfficiencyScoreCard
           avgCost={insights.avgCost > 0 ? insights.avgCost : data.avgCost}
           savingsPct={data.savingsPercent}
@@ -2450,324 +2517,252 @@ function HomeInner({ data }: { data: UsageData }) {
         />
       </div>
 
-      {/* ── Spending Insights ── */}
-      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
-        className="glass-panel rounded-2xl p-5 mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <BrainCircuit className="w-4 h-4 text-primary" />
-          <p className="text-sm font-bold text-foreground tracking-tight">Spending Insights</p>
-          <span className="ml-auto flex items-center gap-1.5 text-[10px] font-bold text-success uppercase tracking-widest">
-            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
-            live
-          </span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {/* Today's spend */}
-          <div className="fintech-card flex flex-col gap-1.5 p-3.5 rounded-xl">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <Receipt className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Today's Spend</p>
+      <div className="flex flex-col lg:flex-row gap-6 mb-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
+          className="glass-panel rounded-2xl p-6 lg:w-[60%] min-w-0">
+          <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-muted-foreground" />
+              <h2 className="text-lg font-display font-bold text-foreground">Transactions</h2>
+              <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">{transactions.length}/10</span>
             </div>
-            <p className="text-xl font-bold font-mono tabular-nums text-red-400">
-              ${insights.spentToday > 0 ? insights.spentToday.toFixed(2) : "0.00"}
-            </p>
-            <p className="text-[10px] text-muted-foreground">from today's tasks</p>
-          </div>
-
-          {/* Total saved */}
-          <div className="fintech-card flex flex-col gap-1.5 p-3.5 rounded-xl">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <TrendingDown className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total Saved</p>
-            </div>
-            <p className="text-xl font-bold font-mono tabular-nums text-emerald-400">+${totalSaved.toFixed(2)}</p>
-            <p className="text-[10px] text-muted-foreground">via optimizations</p>
-          </div>
-
-          {/* Most used provider */}
-          <div className="fintech-card flex flex-col gap-1.5 p-3.5 rounded-xl">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <Zap className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Top Provider</p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {insights.topProvider !== "—" ? (
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${PROVIDER_COLOR[insights.topProvider] ?? "text-foreground bg-secondary"}`}>
-                  {insights.topProvider}
-                </span>
-              ) : (
-                <p className="text-xl font-bold text-muted-foreground">—</p>
-              )}
-            </div>
-            <p className="text-[10px] text-muted-foreground">most tasks routed</p>
-          </div>
-
-          {/* Avg cost per task */}
-          <div className="fintech-card flex flex-col gap-1.5 p-3.5 rounded-xl">
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <ArrowUpRight className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg Cost / Task</p>
-            </div>
-            <p className="text-xl font-bold font-mono tabular-nums text-blue-400">
-              {insights.avgCost > 0 ? `$${insights.avgCost.toFixed(3)}` : "—"}
-            </p>
-            <p className="text-[10px] text-muted-foreground">across recent tasks</p>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ── Monthly Budget ── */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-        className={`glass-panel rounded-2xl p-6 mb-6 border transition-colors duration-500 ${budgetStatus.bg}`}>
-        <div className="flex items-center justify-between gap-4 flex-wrap mb-5">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg bg-secondary ${budgetStatus.color}`}><Target className="w-4 h-4" /></div>
-            <div>
-              <h2 className="text-base font-bold text-foreground">Monthly Budget</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Track your balance against limit</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Limit:</span>
-            {editingBudget ? (
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-foreground font-medium">$</span>
-                <input autoFocus type="number" min={1} value={budgetInput}
-                  onChange={e => setBudgetInput(e.target.value)} onBlur={commitBudget}
-                  onKeyDown={e => {
-                    if (e.key === "Enter") commitBudget();
-                    if (e.key === "Escape") { setBudgetInput(String(budget)); setEditingBudget(false); }
-                  }}
-                  className="w-24 text-sm font-semibold bg-secondary border border-border rounded-lg px-2.5 py-1 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
-                <span className="text-sm text-muted-foreground">/mo</span>
-              </div>
-            ) : (
-              <button onClick={() => { setBudgetInput(String(budget)); setEditingBudget(true); }}
-                className="text-sm font-semibold text-foreground bg-secondary hover:bg-secondary/80 border border-border rounded-lg px-3 py-1 transition-colors">
-                ${budget}/mo ✏️
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="mb-3">
-          <div className="flex justify-between text-xs text-muted-foreground mb-2">
-            <span>{formatCurrency(balance)} used</span>
-            <span>{formatCurrency(Math.max(0, budget - balance))} remaining</span>
-          </div>
-          <div className="h-3 rounded-full bg-secondary overflow-hidden">
-            <motion.div className={`h-full rounded-full transition-colors duration-500 ${budgetStatus.barColor}`}
-              initial={{ width: 0 }} animate={{ width: `${usedPct}%` }}
-              transition={{ duration: 0.8, ease: "easeOut" }} />
-          </div>
-          <div className="flex justify-between text-xs mt-1.5">
-            <span className="text-muted-foreground">$0</span>
-            <span className="text-muted-foreground font-medium">{usedPct.toFixed(0)}% used</span>
-            <span className="text-muted-foreground">{formatCurrency(budget)}</span>
-          </div>
-        </div>
-        <div className={`flex items-center gap-2 text-sm font-medium ${budgetStatus.color}`}>
-          {budgetStatus.icon}
-          <span>{budgetStatus.label}</span>
-          {usedPct < 70 && (
-            <span className="text-xs text-muted-foreground font-normal ml-1">
-              — {formatCurrency(Math.max(0, budget - balance))} left this month
-            </span>
-          )}
-        </div>
-      </motion.div>
-
-      {/* ── Where money is going ── */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-        className="glass-panel rounded-2xl p-6 mb-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-display font-bold text-foreground">Where your AI money is going</h2>
-            <p className="text-sm text-muted-foreground mt-1">This month's balance by use case</p>
-          </div>
-          <span className="text-xs text-muted-foreground bg-secondary px-3 py-1.5 rounded-full">Simulated</span>
-        </div>
-        <div className="space-y-5">
-          {SPEND_CATEGORIES.map((cat, i) => (
-            <motion.div key={cat.label}
-              initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.45 + i * 0.08 }}>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2.5">
-                  <div className={`p-1.5 rounded-lg bg-current/15 ${cat.textColor}`}>{cat.icon}</div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{cat.label}</p>
-                    <p className="text-xs text-muted-foreground">{cat.description}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-foreground">{formatCurrency(cat.amount)}</p>
-                  <p className={`text-xs font-medium ${cat.textColor}`}>{cat.pct}%</p>
-                </div>
-              </div>
-              <AnimatedBar pct={cat.pct} color={cat.color} />
-            </motion.div>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* ── Savings Insights ── */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.44 }}
-        className="glass-panel rounded-2xl p-6 mb-6">
-        <div className="flex items-center gap-2 mb-6">
-          <TrendingDown className="w-5 h-5 text-primary" />
-          <h2 className="text-xl font-display font-bold text-foreground">Savings Insights</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-          {(data?.savingsInsights?.topSavings ?? []).map(item => (
-            <div key={item.label} className="flex items-start gap-3 p-4 rounded-xl bg-secondary/40 border border-border/40">
-              <div className={`p-2 rounded-lg flex-shrink-0 ${categoryColor(item.category)}`}>{categoryIcon(item.category)}</div>
-              <div className="min-w-0">
-                <p className="text-sm text-muted-foreground leading-snug">{item.label}</p>
-                <p className="text-lg font-bold text-success mt-1">{formatCurrency(item.savedAmount)} saved</p>
+            <div className="flex items-center gap-2.5">
+              <AnimatePresence mode="wait">
+                <motion.span key={lastUpdated} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="text-xs text-muted-foreground/70">
+                  Updated {formatLastUpdated(lastUpdated)}
+                </motion.span>
+              </AnimatePresence>
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-secondary px-3 py-1.5 rounded-full">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />Live
               </div>
             </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/8 border border-red-500/20">
-            <div className="p-2 rounded-lg text-red-400 bg-red-400/10 flex-shrink-0"><AlertTriangle className="w-4 h-4" /></div>
-            <div>
-              <p className="text-sm text-muted-foreground">Estimated Wasted Spend</p>
-              <p className="text-xl font-bold text-red-400">{formatCurrency(data?.savingsInsights?.wastedSpend ?? 0)}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">requests that could be cheaper</p>
-            </div>
           </div>
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-primary/8 border border-primary/20">
-            <div className="p-2 rounded-lg text-primary bg-primary/10 flex-shrink-0"><Lightbulb className="w-4 h-4" /></div>
-            <div>
-              <p className="text-sm font-medium text-primary mb-1">Recommendation</p>
-              <p className="text-sm text-foreground leading-relaxed">{data?.savingsInsights?.recommendation ?? ""}</p>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* ── Transactions ── */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.48 }}
-        className="glass-panel rounded-2xl p-6">
-        <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-muted-foreground" />
-            <h2 className="text-xl font-display font-bold text-foreground">Transactions</h2>
-            <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
-              {transactions.length}/10
-            </span>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={lastUpdated}
-                initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }} transition={{ duration: 0.3 }}
-                className="text-xs text-muted-foreground/70"
-              >
-                Updated {formatLastUpdated(lastUpdated)}
-              </motion.span>
-            </AnimatePresence>
-            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-secondary px-3 py-1.5 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              Live
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <AnimatePresence initial={false}>
-            {transactions.map(tx => {
-              const isNew   = newTxIds.has(tx.id);
-              const isSave  = tx.type === "optimization";
-              const isMode  = tx.type === "mode_switch";
-              const isDepos = tx.type === "deposit";
-              const isSpend = tx.type === "usage";
-              return (
-                <motion.div key={tx.id}
-                  initial={{ opacity: 0, y: -20, scale: 0.94 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95, height: 0, marginBottom: 0 }}
-                  transition={{ type: "spring", stiffness: 420, damping: 24 }}
-                  className={`tx-row justify-between border transition-colors duration-500 ${
-                    isNew
-                      ? isSave || isDepos
-                        ? "bg-emerald-400/8 border-emerald-400/35 shadow-[0_0_12px_rgba(52,211,153,0.10)]"
+          <div className="space-y-2">
+            <AnimatePresence initial={false}>
+              {transactions.map(tx => {
+                const isNew   = newTxIds.has(tx.id);
+                const isSave  = tx.type === "optimization";
+                const isMode  = tx.type === "mode_switch";
+                const isDepos = tx.type === "deposit";
+                const isSpend = tx.type === "usage";
+                return (
+                  <motion.div key={tx.id}
+                    initial={{ opacity: 0, y: -20, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95, height: 0, marginBottom: 0 }}
+                    transition={{ type: "spring", stiffness: 420, damping: 24 }}
+                    className={`tx-row justify-between border transition-colors duration-500 ${
+                      isNew
+                        ? isSave || isDepos ? "bg-emerald-400/8 border-emerald-400/35 shadow-[0_0_12px_rgba(52,211,153,0.10)]"
                         : "bg-primary/8 border-primary/35 shadow-[0_0_12px_rgba(139,92,246,0.10)]"
-                      : "bg-card/20 border-border/25"
-                  }`}>
-                  {/* Permanent type-color bar on left */}
-                  <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-7 rounded-r-full ${
-                    isSave  ? "bg-success"
-                  : isDepos ? "bg-emerald-400"
-                  : isMode  ? "bg-primary"
-                  : "bg-red-400/60"
-                  }`} />
-
-                  <div className="flex items-center gap-3 pl-1">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      isSave  ? "bg-success/12 text-success"
-                    : isDepos ? "bg-emerald-400/12 text-emerald-300"
-                    : isMode  ? "bg-primary/12 text-primary"
-                    : "bg-secondary/80 text-muted-foreground"
+                        : "bg-card/20 border-border/25"
                     }`}>
-                      {isSave  && <ArrowDownRight className="w-3.5 h-3.5" />}
-                      {isDepos && <Plus className="w-3.5 h-3.5" />}
-                      {isMode  && <Sparkles className="w-3.5 h-3.5" />}
-                      {isSpend && <ArrowUpRight className="w-3.5 h-3.5" />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground leading-snug">{tx.label}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                        <p className="text-xs text-muted-foreground">{formatRelTime(tx.timestamp)}</p>
-                        {tx.provider && (
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${PROVIDER_COLOR[tx.provider] ?? "text-muted-foreground bg-secondary"}`}>
-                            {tx.provider}
-                          </span>
-                        )}
-                        {isNew && (
-                          <motion.span initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ delay: 2.8, duration: 0.4 }}
-                            className="text-[10px] font-bold text-current px-1.5 py-0.5 rounded-full bg-current/10"
-                            style={{ color: isSave || isDepos ? "#34d399" : "#8b5cf6" }}>
-                            NEW
-                          </motion.span>
-                        )}
+                    <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-7 rounded-r-full ${
+                      isSave ? "bg-success" : isDepos ? "bg-emerald-400" : isMode ? "bg-primary" : "bg-red-400/60"
+                    }`} />
+                    <div className="flex items-center gap-3 pl-1">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                        isSave ? "bg-success/12 text-success" : isDepos ? "bg-emerald-400/12 text-emerald-300"
+                        : isMode ? "bg-primary/12 text-primary" : "bg-secondary/80 text-muted-foreground"
+                      }`}>
+                        {isSave && <ArrowDownRight className="w-3.5 h-3.5" />}
+                        {isDepos && <Plus className="w-3.5 h-3.5" />}
+                        {isMode && <Sparkles className="w-3.5 h-3.5" />}
+                        {isSpend && <ArrowUpRight className="w-3.5 h-3.5" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground leading-snug">{tx.label}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <p className="text-xs text-muted-foreground">{formatRelTime(tx.timestamp)}</p>
+                          {tx.provider && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${PROVIDER_COLOR[tx.provider] ?? "text-muted-foreground bg-secondary"}`}>{tx.provider}</span>
+                          )}
+                          {isNew && (
+                            <motion.span initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ delay: 2.8, duration: 0.4 }}
+                              className="text-[10px] font-bold text-current px-1.5 py-0.5 rounded-full bg-current/10"
+                              style={{ color: isSave || isDepos ? "#34d399" : "#8b5cf6" }}>NEW</motion.span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                    {tx.amount !== 0 ? (
+                      <div className={`text-sm font-bold font-mono tabular-nums flex items-center gap-0.5 ${isSave || isDepos ? "text-success" : "text-red-400"}`}>
+                        <span>{isSave || isDepos ? "+" : "-"}</span>
+                        <span>${Math.abs(tx.amount).toFixed(3)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-full">mode</span>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+            {transactions.length === 0 && (
+              <div className="text-center py-10 text-muted-foreground text-sm">
+                No transactions yet — click Run Task above to get started.
+              </div>
+            )}
+          </div>
+        </motion.div>
 
-                  {tx.amount !== 0 ? (
-                    <div className={`text-sm font-bold font-mono tabular-nums flex items-center gap-0.5 ${
-                      isSave || isDepos ? "text-success" : "text-red-400"
-                    }`}>
-                      <span>{isSave || isDepos ? "+" : "-"}</span>
-                      <span>${Math.abs(tx.amount).toFixed(3)}</span>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-0.5 rounded-full">mode</span>
-                  )}
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-          {transactions.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              No transactions yet — click an action above to get started.
-
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
+          className="glass-panel rounded-2xl p-6 lg:w-[40%] min-w-0 flex flex-col gap-6">
+          <div>
+            <div className="flex items-center gap-2 mb-5">
+              <Zap className="w-4 h-4 text-primary" />
+              <h2 className="text-lg font-display font-bold text-foreground">Provider Breakdown</h2>
             </div>
-          )}
+            {totalProviderSpend === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-secondary/50 flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-muted-foreground/30" />
+                </div>
+                <p className="text-sm text-muted-foreground">No provider data yet</p>
+                <p className="text-xs text-muted-foreground/60">Run a task to see spend by provider</p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {Object.entries(providerTotals).sort((a, b) => b[1] - a[1]).map(([provider, cost], i) => {
+                  const pct = totalProviderSpend > 0 ? (cost / totalProviderSpend) * 100 : 0;
+                  const barColor = PROVIDER_BAR[provider] ?? "bg-primary";
+                  return (
+                    <motion.div key={provider} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.32 + i * 0.07 }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${PROVIDER_COLOR[provider] ?? "text-foreground bg-secondary"}`}>
+                          {provider}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-mono font-bold text-foreground">{fmtCost(cost)}</span>
+                          <span className="text-xs font-semibold text-muted-foreground/60 w-8 text-right">{Math.round(pct)}%</span>
+                        </div>
+                      </div>
+                      <div className="h-2.5 rounded-full bg-secondary overflow-hidden">
+                        <motion.div className={`h-full rounded-full ${barColor}`}
+                          initial={{ width: 0 }} animate={{ width: `${pct}%` }}
+                          transition={{ duration: 0.9, ease: "easeOut", delay: 0.38 + i * 0.07 }} />
+                      </div>
+                    </motion.div>
+                  );
+                })}
+                <div className="pt-3 border-t border-border/30 flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground font-semibold">Total session</span>
+                  <span className="text-sm font-mono font-bold text-foreground">{fmtCost(totalProviderSpend)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className={`rounded-2xl p-4 border transition-colors duration-500 ${budgetStatus.bg}`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Target className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-sm font-bold text-foreground">Monthly Budget</span>
+              </div>
+              {editingBudget ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">$</span>
+                  <input autoFocus type="number" min={1} value={budgetInput}
+                    onChange={e => setBudgetInput(e.target.value)} onBlur={commitBudget}
+                    onKeyDown={e => { if (e.key === "Enter") commitBudget(); if (e.key === "Escape") { setBudgetInput(String(budget)); setEditingBudget(false); } }}
+                    className="w-16 text-xs font-semibold bg-secondary border border-border rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+                  <span className="text-xs text-muted-foreground">/mo</span>
+                </div>
+              ) : (
+                <button onClick={() => { setBudgetInput(String(budget)); setEditingBudget(true); }}
+                  className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">
+                  ${budget}/mo
+                </button>
+              )}
+            </div>
+            <div className="h-2.5 rounded-full bg-secondary overflow-hidden mb-2">
+              <motion.div className={`h-full rounded-full transition-colors duration-500 ${budgetStatus.barColor}`}
+                initial={{ width: 0 }} animate={{ width: `${usedPct}%` }}
+                transition={{ duration: 0.8, ease: "easeOut" }} />
+            </div>
+            <div className="flex justify-between text-[10px] text-muted-foreground mb-2">
+              <span>{formatCurrency(balance)} used</span>
+              <span>{usedPct.toFixed(0)}% of ${budget}</span>
+              <span>{formatCurrency(Math.max(0, budget - balance))} left</span>
+            </div>
+            <div className={`flex items-center gap-1.5 text-xs font-semibold ${budgetStatus.color}`}>
+              {budgetStatus.icon}
+              <span>{budgetStatus.label}</span>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* LAYER 3 — INTELLIGENCE */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.34 }}
+        className="glass-panel rounded-2xl p-6 mb-6">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <BrainCircuit className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-display font-bold text-foreground">Intelligence Feed</h2>
+            <span className="text-xs text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
+              {homeInsights.length} insights
+            </span>
+          </div>
+          <button onClick={() => setInsightsExpanded(v => !v)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors">
+            {insightsExpanded ? "Show less" : "View all insights"}
+            <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${insightsExpanded ? "rotate-90" : ""}`} />
+          </button>
         </div>
+
+        <div className="flex gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+          {homeInsights.slice(0, 3).map((insight, i) => {
+            const s = INSIGHT_STYLES[insight.level];
+            const Icon = insight.icon;
+            return (
+              <motion.div key={insight.id}
+                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.38 + i * 0.07, duration: 0.3 }}
+                className={`flex-shrink-0 w-72 flex items-start gap-3 p-4 rounded-xl border ${s.border} ${s.bg}`}>
+                <div className={`p-2.5 rounded-xl flex-shrink-0 ${s.iconCls}`}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground leading-relaxed">{insight.text}</p>
+                  <span className={`mt-2 inline-block text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${s.badge}`}>
+                    {insight.level}
+                  </span>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <AnimatePresence>
+          {insightsExpanded && (
+            <motion.div key="expanded"
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.3, ease: "easeOut" }}
+              className="overflow-hidden">
+              <div className="space-y-2.5 mt-4 pt-4 border-t border-border/30">
+                {homeInsights.slice(3).map((insight, i) => {
+                  const s = INSIGHT_STYLES[insight.level];
+                  const Icon = insight.icon;
+                  return (
+                    <motion.div key={insight.id}
+                      initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.06 }}
+                      className={`flex items-start gap-3.5 p-4 rounded-xl border ${s.border} ${s.bg}`}>
+                      <div className={`p-2.5 rounded-xl flex-shrink-0 ${s.iconCls}`}><Icon className="w-4 h-4" /></div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground leading-relaxed">{insight.text}</p>
+                      </div>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0 ${s.badge}`}>{insight.level}</span>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
 
-      {/* ── Intelligence Feed ── */}
-      <IntelligenceFeed
-        transactions={transactions}
-        avgCost={data.avgCost}
-        totalSaved={totalSaved}
-      />
-
-      {/* ── Pre-Flight Modal ── */}
       <AnimatePresence>
         {preFlight && (
           <PreFlightModal
@@ -2784,15 +2779,7 @@ function HomeInner({ data }: { data: UsageData }) {
         )}
       </AnimatePresence>
 
-      {/* ── AI Spending Agent Chat ── */}
-      <AgentChat
-        wallet={wallet}
-        data={data}
-        onOptimize={handleOptimize}
-        onModeSwitch={handleModeSwitch}
-      />
-
-      {/* ── Browser Extension Simulation Widget ── */}
+      <AgentChat wallet={wallet} data={data} onOptimize={handleOptimize} onModeSwitch={handleModeSwitch} />
       <ExtensionWidget />
     </Shell>
   );
