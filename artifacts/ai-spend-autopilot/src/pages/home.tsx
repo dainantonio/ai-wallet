@@ -102,12 +102,22 @@ function estimatePromptCosts(text: string) {
   const inputTokens  = Math.round(words * 1.3);
   const outputTokens = Math.round(inputTokens * 0.5);
   return PROMPT_COST_RATES.map(r => ({
-    provider: r.provider,
-    model:    r.model,
-    cost: +(inputTokens * r.inRate + outputTokens * r.outRate).toFixed(7),
+    provider:  r.provider,
+    model:     r.model,
+    cost:      +(inputTokens * r.inRate + outputTokens * r.outRate).toFixed(7),
     inputTokens,
+    inputCost: +(inputTokens * r.inRate).toFixed(7),
+    inRate:    r.inRate,
+    outRate:   r.outRate,
   })).sort((a, b) => a.cost - b.cost);
 }
+
+const RESPONSE_HINTS = [
+  { id: "short",  label: "Short",  desc: "summary, yes/no, quick answer", mult: 0.3 },
+  { id: "medium", label: "Medium", desc: "explanation, email, paragraph",  mult: 0.8 },
+  { id: "long",   label: "Long",   desc: "essay, code, detailed analysis", mult: 2.0 },
+] as const;
+type ResponseHintId = typeof RESPONSE_HINTS[number]["id"];
 
 // ─── Provider badge colors ────────────────────────────────────────────────────
 const PROVIDER_COLOR: Record<string, string> = {
@@ -716,12 +726,13 @@ function CostPreviewPanel({ avgCost }: { avgCost: number }) {
 
 // ─── Hero Cost Estimator (horizontal pill layout) ────────────────────────────
 function HeroCostEstimator({ avgCost }: { avgCost: number }) {
-  const [text, setText]                     = useState("");
-  const [debounced, setDebounced]           = useState("");
-  const [optimizing, setOptimizing]         = useState(false);
-  const [optimizeResult, setOptimizeResult] = useState<OptimizeResult | null>(null);
-  const [optimizeError, setOptimizeError]   = useState<string | null>(null);
-  const [copied, setCopied]                 = useState(false);
+  const [text, setText]                         = useState("");
+  const [debounced, setDebounced]               = useState("");
+  const [optimizing, setOptimizing]             = useState(false);
+  const [optimizeResult, setOptimizeResult]     = useState<OptimizeResult | null>(null);
+  const [optimizeError, setOptimizeError]       = useState<string | null>(null);
+  const [copied, setCopied]                     = useState(false);
+  const [responseHint, setResponseHint]         = useState<ResponseHintId | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(text), 300);
@@ -730,18 +741,44 @@ function HeroCostEstimator({ avgCost }: { avgCost: number }) {
 
   useEffect(() => { setOptimizeResult(null); setOptimizeError(null); }, [text]);
 
-  const estimates    = useMemo(() => estimatePromptCosts(debounced), [debounced]);
-  const cheapest     = estimates?.[0];
-  const priciest     = estimates?.[estimates.length - 1];
-  const hasSavings   = cheapest && priciest && cheapest.provider !== priciest.provider;
-  const savings      = hasSavings ? priciest!.cost - cheapest!.cost : 0;
+  const estimates = useMemo(() => estimatePromptCosts(debounced), [debounced]);
 
-  const optEstimates  = useMemo(() => optimizeResult ? estimatePromptCosts(optimizeResult.optimizedText) : null, [optimizeResult]);
-  const origTokens    = estimates?.[0]?.inputTokens ?? 0;
-  const newTokens     = optEstimates?.[0]?.inputTokens ?? 0;
-  const origOpenAi    = estimates?.find(e => e.provider === "OpenAI")?.cost ?? 0;
-  const newOpenAi     = optEstimates?.find(e => e.provider === "OpenAI")?.cost ?? 0;
-  const costSaved     = Math.max(0, origOpenAi - newOpenAi);
+  // Per-provider breakdown with input/output split
+  const providerBreakdowns = useMemo(() => {
+    if (!estimates) return null;
+    const hintMult = responseHint ? RESPONSE_HINTS.find(h => h.id === responseHint)!.mult : null;
+    return estimates.map(e => {
+      const outLow  = +(e.inputTokens * 0.3  * e.outRate).toFixed(7);
+      const outHigh = +(e.inputTokens * 2.0  * e.outRate).toFixed(7);
+      const outPt   = hintMult !== null ? +(e.inputTokens * hintMult * e.outRate).toFixed(7) : null;
+      return {
+        ...e,
+        outLow, outHigh, outPt,
+        totalLow:  e.inputCost + outLow,
+        totalHigh: e.inputCost + outHigh,
+        totalPt:   outPt !== null ? e.inputCost + outPt : null,
+      };
+    }).sort((a, b) => {
+      const va = a.totalPt ?? (a.totalLow + a.totalHigh) / 2;
+      const vb = b.totalPt ?? (b.totalLow + b.totalHigh) / 2;
+      return va - vb;
+    });
+  }, [estimates, responseHint]);
+
+  const cheapest   = providerBreakdowns?.[0];
+  const priciest   = providerBreakdowns?.[providerBreakdowns.length - 1];
+  const hasSavings = cheapest && priciest && cheapest.provider !== priciest.provider;
+  const savings    = hasSavings
+    ? (priciest!.totalPt  ?? (priciest!.totalLow  + priciest!.totalHigh)  / 2)
+    - (cheapest!.totalPt  ?? (cheapest!.totalLow  + cheapest!.totalHigh)  / 2)
+    : 0;
+
+  const optEstimates = useMemo(() => optimizeResult ? estimatePromptCosts(optimizeResult.optimizedText) : null, [optimizeResult]);
+  const origTokens   = estimates?.[0]?.inputTokens ?? 0;
+  const newTokens    = optEstimates?.[0]?.inputTokens ?? 0;
+  const origOpenAi   = estimates?.find(e => e.provider === "OpenAI")?.cost ?? 0;
+  const newOpenAi    = optEstimates?.find(e => e.provider === "OpenAI")?.cost ?? 0;
+  const costSaved    = Math.max(0, origOpenAi - newOpenAi);
 
   const handleOptimize = async () => {
     if (!text.trim() || optimizing) return;
@@ -787,34 +824,104 @@ function HeroCostEstimator({ avgCost }: { avgCost: number }) {
         className="w-full bg-white/[0.06] border border-white/[0.10] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/40 resize-none transition-all duration-200"
       />
 
-      {/* Horizontal provider pills */}
+      {/* Cost breakdown + response hint */}
       <AnimatePresence>
-        {estimates && (
-          <motion.div key="pills"
+        {providerBreakdowns && (
+          <motion.div key="breakdown"
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }}
-            className="flex gap-2 mt-3 flex-wrap items-center">
-            {estimates.map((e, i) => {
+            className="mt-3 space-y-3">
+
+            {/* Response Length hint pills */}
+            <div>
+              <p className="text-[10px] text-white/35 font-semibold uppercase tracking-wider mb-1.5">Response Length</p>
+              <div className="flex gap-2">
+                {RESPONSE_HINTS.map(h => (
+                  <button
+                    key={h.id}
+                    onClick={() => setResponseHint(prev => prev === h.id ? null : h.id)}
+                    title={h.desc}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-150 ${
+                      responseHint === h.id
+                        ? "bg-white/15 border-white/30 text-white"
+                        : "bg-white/[0.04] border-white/[0.08] text-white/45 hover:text-white/65 hover:border-white/14"
+                    }`}>
+                    {h.label}
+                  </button>
+                ))}
+              </div>
+              {responseHint && (
+                <p className="text-[10px] text-white/30 mt-1">
+                  {RESPONSE_HINTS.find(h => h.id === responseHint)!.desc}
+                </p>
+              )}
+            </div>
+
+            {/* Per-provider cards */}
+            {providerBreakdowns.map((e, i) => {
               const isCheapest = i === 0;
-              const provColor = PROVIDER_COLOR[e.provider]?.split(" ")[0] ?? "text-white/80";
               return (
-                <div key={e.provider}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
-                    isCheapest ? "bg-emerald-400/15 border-emerald-400/40 text-emerald-300" : "bg-white/[0.06] border-white/[0.10] text-white/60"
+                <motion.div
+                  key={e.provider}
+                  layout
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  className={`rounded-xl border px-3.5 py-2.5 transition-colors duration-200 ${
+                    isCheapest
+                      ? "bg-emerald-400/10 border-emerald-400/35"
+                      : "bg-white/[0.04] border-white/[0.08]"
                   }`}>
-                  <span className={`font-bold ${provColor}`}>{e.provider}</span>
-                  <span className="font-mono">{fmtCost(e.cost)}</span>
-                  {isCheapest && <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-wide">cheapest</span>}
-                </div>
+                  {/* Provider name + model */}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${PROVIDER_COLOR[e.provider] ?? "text-white/80 bg-white/10"}`}>
+                        {e.provider}
+                      </span>
+                      <span className="text-[10px] text-white/25">{e.model}</span>
+                    </div>
+                    {isCheapest && (
+                      <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-wide">cheapest</span>
+                    )}
+                  </div>
+
+                  {/* Cost breakdown row */}
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-[10px] text-white/35 mb-0.5">Input (exact)</p>
+                      <p className="font-mono font-bold text-white/75">{fmtCost(e.inputCost)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-white/35 mb-0.5">Output (est.)</p>
+                      <p className="font-mono font-bold text-white/75">
+                        {e.outPt !== null
+                          ? `~${fmtCost(e.outPt)}`
+                          : `~${fmtCost(e.outLow)}–${fmtCost(e.outHigh)}`}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-white/35 mb-0.5">Total</p>
+                      <p className={`font-mono font-bold ${isCheapest ? "text-emerald-300" : "text-white/75"}`}>
+                        {e.totalPt !== null
+                          ? fmtCost(e.totalPt)
+                          : `${fmtCost(e.totalLow)}–${fmtCost(e.totalHigh)}`}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
               );
             })}
-            {hasSavings && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-400/10 border border-amber-400/25 text-xs text-amber-300 font-semibold">
-                <Lightbulb className="w-3 h-3" />
-                Save {fmtCost(savings)} vs {priciest!.provider}
-              </div>
-            )}
-            <span className="text-[10px] text-white/30 pl-1">~{estimates[0].inputTokens} tokens</span>
+
+            {/* Meta info + savings */}
+            <div className="flex items-center justify-between flex-wrap gap-2 pt-0.5">
+              <p className="text-[10px] text-white/25">
+                Input cost is exact · Output varies by response length
+              </p>
+              {hasSavings && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/25 text-[10px] text-amber-300 font-semibold">
+                  <Lightbulb className="w-3 h-3" />
+                  Save ~{fmtCost(savings)} vs {priciest!.provider}
+                </div>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
