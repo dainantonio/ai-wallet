@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
-import { GoogleGenAI } from "@google/genai";
+
 import { db, costLogsTable } from "@workspace/db";
 import { getUserApiKey } from "./settings";
 
@@ -11,7 +11,7 @@ const router: IRouter = Router();
 const RATES: Record<string, { inRate: number; outRate: number; defaultModel: string; dbProvider: string }> = {
   openai:    { inRate: 0.000050,  outRate: 0.000150,  defaultModel: "gpt-4o",                     dbProvider: "OpenAI"    },
   anthropic: { inRate: 0.000075,  outRate: 0.000240,  defaultModel: "claude-3-5-sonnet-20241022",  dbProvider: "Anthropic" },
-  gemini:    { inRate: 0.0000125, outRate: 0.0000375, defaultModel: "gemini-1.5-flash",             dbProvider: "Google"    },
+  gemini:    { inRate: 0.0000125, outRate: 0.0000375, defaultModel: "gemini-2.0-flash",             dbProvider: "Google"    },
 };
 
 function calcCost(provider: string, inputTokens: number, outputTokens: number): number {
@@ -171,8 +171,6 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
         return;
       }
 
-      const ai = new GoogleGenAI({ apiKey });
-
       const contents = messages
         .filter((m) => m.role !== "system")
         .map((m) => ({
@@ -180,14 +178,29 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
           parts: [{ text: m.content }],
         }));
 
-      const result = await ai.models.generateContent({
-        model: resolvedModel,
-        contents,
-      });
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${resolvedModel}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents }),
+        },
+      );
 
-      const content      = result.text ?? "";
-      const inputTokens  = result.usageMetadata?.promptTokenCount     ?? 0;
-      const outputTokens = result.usageMetadata?.candidatesTokenCount ?? 0;
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text();
+        console.error("[proxy] gemini REST error:", geminiRes.status, errText);
+        throw new Error(`Gemini API ${geminiRes.status}: ${errText}`);
+      }
+
+      const geminiJson = await geminiRes.json() as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+        usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+      };
+
+      const content      = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      const inputTokens  = geminiJson.usageMetadata?.promptTokenCount     ?? 0;
+      const outputTokens = geminiJson.usageMetadata?.candidatesTokenCount ?? 0;
       const cost = calcCost("gemini", inputTokens, outputTokens);
 
       logCostToDb(resolvedUserId, "gemini", resolvedModel, inputTokens, outputTokens, cost, label);

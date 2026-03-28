@@ -1323,7 +1323,7 @@ function AgentChat({ wallet, data, onOptimize, onModeSwitch }: AgentChatProps) {
         credentials: "include",
         body: JSON.stringify({
           provider: "gemini",
-          model: "gemini-1.5-flash",
+          model: "gemini-2.0-flash",
           messages: [
             // Gemini doesn't support role:"system" — inject context as first user/assistant turn
             { role: "user",      content: buildSystemPrompt(wallet, data) },
