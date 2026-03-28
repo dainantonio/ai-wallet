@@ -12,7 +12,7 @@ import {
   TriangleAlert, XCircle, Gauge, Leaf, Flame,
   CreditCard, Receipt, ArrowDownRight, ArrowUpRight,
   Play, Plus, RefreshCw, X, ShieldCheck, FlaskConical, Copy,
-  Minimize2, Maximize2, Globe, Calendar,
+  Minimize2, Maximize2, Globe, Calendar, Send,
 } from "lucide-react";
 import { motion, AnimatePresence, animate as motionAnimate } from "framer-motion";
 import type { UsageData } from "@workspace/api-client-react/src/generated/api.schemas";
@@ -943,6 +943,413 @@ function IntelligenceFeed({
         </AnimatePresence>
       </div>
     </motion.div>
+  );
+}
+
+// ─── Agent Chat Widget ────────────────────────────────────────────────────────
+
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  ts: number;
+  isAction?: boolean;
+}
+
+interface AgentChatProps {
+  wallet: WalletState | null;
+  data: UsageData;
+  onOptimize: () => Promise<void>;
+  onModeSwitch: (mode: SpendMode) => Promise<void>;
+}
+
+const QUICK_PROMPTS = [
+  "How much am I spending?",
+  "How can I reduce costs?",
+  "Switch to Saver mode",
+  "Run an optimization",
+];
+
+function buildSystemPrompt(wallet: WalletState | null, data: UsageData): string {
+  const walletCtx = wallet ? {
+    balance:     wallet.balance,
+    totalSaved:  wallet.totalSaved,
+    spendMode:   wallet.spendMode,
+    recentSpend: wallet.transactions
+      .filter(t => t.type === "usage")
+      .reduce((s, t) => s + Math.abs(t.amount), 0)
+      .toFixed(4),
+    optimizationCount: wallet.transactions.filter(t => t.type === "optimization").length,
+  } : null;
+
+  const usageCtx = {
+    totalRequests:  data.totalRequests,
+    avgCost:        data.avgCost,
+    savingsPercent: data.savingsPercent,
+    totalSpend:     data.totalSpend,
+    autopilotSaved: data.autopilotSaved,
+    topTool:        data.topTool,
+  };
+
+  return `You are an AI spending assistant for AI Wallet. Help users understand and optimize their AI API costs. Keep every response to 2-3 sentences max. Be direct and actionable.
+
+Current wallet: ${JSON.stringify(walletCtx)}
+Current usage: ${JSON.stringify(usageCtx)}
+
+When the user explicitly asks you to perform an action, prepend a JSON action block to your reply like:
+{"action":"optimize"}
+I'm running an optimization now — this should surface some savings!
+
+Or for mode switch:
+{"action":"mode","value":"saver"}
+Switched to Saver Mode — routes ~50% of calls to cheaper models.
+
+Valid actions: optimize | mode (value: saver | balanced | performance).
+Only emit an action block when the user directly requests that action.`;
+}
+
+function parseAction(raw: string): { action: string; value?: string } | null {
+  const m = raw.match(/\{"action"\s*:\s*"([^"]+)"(?:\s*,\s*"value"\s*:\s*"([^"]+)")?\}/);
+  return m ? { action: m[1], value: m[2] } : null;
+}
+
+function stripAction(raw: string): string {
+  return raw.replace(/\{"action"\s*:\s*"[^"]*"(?:\s*,\s*"value"\s*:\s*"[^"]*")?\}\s*/g, "").trim();
+}
+
+function AgentChat({ wallet, data, onOptimize, onModeSwitch }: AgentChatProps) {
+  const [isOpen,   setIsOpen]   = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input,    setInput]    = useState("");
+  const [typing,   setTyping]   = useState(false);
+  const [unread,   setUnread]   = useState(0);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef  = useRef<HTMLInputElement>(null);
+
+  // Auto-scroll on new message / typing change
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, typing]);
+
+  // Focus input + clear unread when opened
+  useEffect(() => {
+    if (isOpen) {
+      setUnread(0);
+      setTimeout(() => inputRef.current?.focus(), 80);
+    }
+  }, [isOpen]);
+
+  const addMsg = useCallback((msg: Omit<ChatMessage, "id" | "ts">) => {
+    setMessages(prev => [
+      ...prev.slice(-9),
+      { ...msg, id: `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ts: Date.now() },
+    ]);
+  }, []);
+
+  const sendMessage = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || typing) return;
+    setInput("");
+    addMsg({ role: "user", content: trimmed });
+    setTyping(true);
+
+    try {
+      const history = messages.slice(-8).map(m => ({ role: m.role, content: m.content }));
+      const res = await fetch("/api/proxy/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          provider: "anthropic",
+          model: "claude-haiku-4-5-20251001",
+          messages: [
+            { role: "system", content: buildSystemPrompt(wallet, data) },
+            ...history,
+            { role: "user", content: trimmed },
+          ],
+        }),
+      });
+
+      if (!res.ok) throw new Error(`${res.status}`);
+      const json = await res.json() as { content?: string; error?: string };
+      if (json.error) throw new Error(json.error);
+
+      const raw         = json.content ?? "I couldn't generate a response right now.";
+      const action      = parseAction(raw);
+      const displayText = action ? stripAction(raw) : raw;
+
+      if (action) {
+        if (action.action === "optimize") {
+          onOptimize().catch(() => {});
+        } else if (action.action === "mode" && action.value) {
+          onModeSwitch(action.value as SpendMode).catch(() => {});
+        }
+      }
+
+      addMsg({ role: "assistant", content: displayText, isAction: !!action });
+      if (!isOpen) setUnread(v => v + 1);
+
+    } catch (err) {
+      const msg = err instanceof Error && err.message.includes("configured")
+        ? "Provider not configured — add your ANTHROPIC_API_KEY in settings."
+        : "Couldn't reach the API right now. Please try again.";
+      addMsg({ role: "assistant", content: msg });
+    } finally {
+      setTyping(false);
+    }
+  }, [typing, messages, wallet, data, addMsg, onOptimize, onModeSwitch, isOpen]);
+
+  return (
+    <>
+      {/* ── FAB ── */}
+      <motion.button
+        onClick={() => setIsOpen(v => !v)}
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 1.5, type: "spring", stiffness: 260, damping: 18 }}
+        whileHover={{ scale: 1.08, y: -2 }}
+        whileTap={{ scale: 0.92 }}
+        className="fixed bottom-24 right-6 z-50 w-14 h-14 rounded-2xl flex items-center justify-center"
+        style={{
+          background:  "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+          boxShadow:   "0 8px 28px rgba(99,102,241,0.50), 0 2px 6px rgba(0,0,0,0.4)",
+        }}
+        aria-label="Open AI spending assistant"
+      >
+        {/* Outer pulse ring when closed */}
+        {!isOpen && (
+          <motion.div
+            className="absolute inset-0 rounded-2xl bg-primary/40"
+            animate={{ scale: [1, 1.35, 1], opacity: [0.5, 0, 0.5] }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: "easeOut" }}
+          />
+        )}
+        <AnimatePresence mode="wait">
+          {isOpen
+            ? <motion.span key="x"   initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90,  opacity: 0 }} transition={{ duration: 0.18 }}><X   className="w-5 h-5 text-white" /></motion.span>
+            : <motion.span key="bot" initial={{ rotate: 90,  opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.18 }}><Bot className="w-5 h-5 text-white" /></motion.span>
+          }
+        </AnimatePresence>
+        {unread > 0 && !isOpen && (
+          <motion.span
+            initial={{ scale: 0 }} animate={{ scale: 1 }}
+            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center shadow-lg"
+          >
+            {unread}
+          </motion.span>
+        )}
+      </motion.button>
+
+      {/* ── Chat drawer ── */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 360, damping: 28 }}
+            className="fixed bottom-[152px] right-6 z-50 flex flex-col rounded-2xl overflow-hidden"
+            style={{
+              width:           "360px",
+              height:          "480px",
+              background:      "rgba(7,7,18,0.97)",
+              backdropFilter:  "blur(28px) saturate(160%)",
+              boxShadow:       "0 24px 64px rgba(0,0,0,0.75), 0 0 0 1px rgba(99,102,241,0.22) inset, 0 0 0 1px rgba(255,255,255,0.04) inset",
+            }}
+          >
+            {/* Header */}
+            <div
+              className="flex items-center gap-3 px-4 py-3 flex-shrink-0"
+              style={{
+                background:  "linear-gradient(90deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.06) 100%)",
+                borderBottom: "1px solid rgba(255,255,255,0.07)",
+              }}
+            >
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
+                style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
+              >
+                <Bot className="w-4 h-4 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-white leading-none">AI Spending Agent</p>
+                <p className="text-[10px] text-white/35 mt-0.5">Powered by Claude Haiku · has wallet context</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-50" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
+                </span>
+                <span className="text-[10px] text-success/70 font-medium">online</span>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+              {messages.length === 0 ? (
+                /* Empty state */
+                <div className="flex flex-col items-center justify-center h-full gap-5 text-center">
+                  <div
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl"
+                    style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
+                  >
+                    <BrainCircuit className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white/80">How can I help you?</p>
+                    <p className="text-xs text-white/35 mt-1 leading-snug">
+                      I have access to your wallet balance,<br />transactions, and usage patterns.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {QUICK_PROMPTS.map(p => (
+                      <button
+                        key={p}
+                        onClick={() => sendMessage(p)}
+                        className="text-xs px-3 py-1.5 rounded-xl border text-white/60 hover:text-white hover:bg-primary/20 hover:border-primary/40 transition-all duration-150"
+                        style={{ borderColor: "rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.04)" }}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {messages.map(msg => (
+                    <motion.div
+                      key={msg.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.22, ease: "easeOut" }}
+                      className={`flex items-end gap-2 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
+                    >
+                      {/* Bot avatar */}
+                      {msg.role === "assistant" && (
+                        <div
+                          className="w-6 h-6 rounded-lg flex-shrink-0 mb-0.5 flex items-center justify-center"
+                          style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
+                        >
+                          <Bot className="w-3.5 h-3.5 text-white" />
+                        </div>
+                      )}
+
+                      <div
+                        className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                          msg.role === "user" ? "rounded-br-sm" : "rounded-bl-sm"
+                        }`}
+                        style={msg.role === "user"
+                          ? { background: "rgba(99,102,241,0.28)", border: "1px solid rgba(99,102,241,0.35)", color: "rgba(255,255,255,0.90)" }
+                          : { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.82)" }
+                        }
+                      >
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                        {msg.isAction && (
+                          <p className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: "rgba(99,102,241,0.8)" }}>
+                            <Zap className="w-2.5 h-2.5" />
+                            Action executed
+                          </p>
+                        )}
+                        <p className="text-[9px] mt-1 opacity-30">
+                          {new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    </motion.div>
+                  ))}
+
+                  {/* Typing indicator */}
+                  <AnimatePresence>
+                    {typing && (
+                      <motion.div
+                        key="typing"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="flex items-end gap-2"
+                      >
+                        <div
+                          className="w-6 h-6 rounded-lg flex-shrink-0 mb-0.5 flex items-center justify-center"
+                          style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
+                        >
+                          <Bot className="w-3.5 h-3.5 text-white" />
+                        </div>
+                        <div
+                          className="px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5"
+                          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}
+                        >
+                          {[0, 1, 2].map(i => (
+                            <motion.span
+                              key={i}
+                              className="w-1.5 h-1.5 rounded-full"
+                              style={{ background: "rgba(255,255,255,0.45)" }}
+                              animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
+                              transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.18, ease: "easeInOut" }}
+                            />
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
+              )}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Quick-reply chips (after first message) */}
+            {messages.length > 0 && !typing && (
+              <div
+                className="px-3 py-1.5 flex gap-1.5 overflow-x-auto flex-shrink-0"
+                style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
+              >
+                {QUICK_PROMPTS.slice(0, 3).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => sendMessage(p)}
+                    className="text-[10px] whitespace-nowrap px-2.5 py-1 rounded-lg flex-shrink-0 text-white/45 hover:text-white/80 hover:bg-primary/20 transition-all duration-150"
+                    style={{ border: "1px solid rgba(255,255,255,0.07)" }}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Input */}
+            <div
+              className="px-3 pb-3 pt-2 flex-shrink-0"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+            >
+              <div
+                className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)" }}
+              >
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
+                  }}
+                  placeholder="Ask about your AI spend…"
+                  disabled={typing}
+                  className="flex-1 bg-transparent text-sm outline-none disabled:opacity-40"
+                  style={{ color: "rgba(255,255,255,0.80)" }}
+                />
+                <motion.button
+                  onClick={() => sendMessage(input)}
+                  disabled={!input.trim() || typing}
+                  whileTap={{ scale: 0.85 }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 disabled:opacity-25 transition-opacity"
+                  style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
+                >
+                  <Send className="w-3.5 h-3.5 text-white" />
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -2358,6 +2765,14 @@ function HomeInner({ data }: { data: UsageData }) {
           />
         )}
       </AnimatePresence>
+
+      {/* ── AI Spending Agent Chat ── */}
+      <AgentChat
+        wallet={wallet}
+        data={data}
+        onOptimize={handleOptimize}
+        onModeSwitch={handleModeSwitch}
+      />
 
       {/* ── Browser Extension Simulation Widget ── */}
       <ExtensionWidget />
