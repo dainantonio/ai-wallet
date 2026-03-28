@@ -1,6 +1,11 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 
+// ─── API key presence check (never log the actual values) ─────────────────────
+console.log("ANTHROPIC_API_KEY set:", !!process.env.ANTHROPIC_API_KEY);
+console.log("OPENAI_API_KEY set:",    !!process.env.OPENAI_API_KEY);
+console.log("GEMINI_API_KEY set:",    !!process.env.GEMINI_API_KEY);
+
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
