@@ -70,6 +70,7 @@ function sanitiseBody(body: Record<string, unknown>): Record<string, unknown> {
 
 // ─── POST /api/proxy/chat ─────────────────────────────────────────────────────
 router.post("/proxy/chat", async (req: Request, res: Response) => {
+  console.log("[proxy] incoming body:", JSON.stringify(req.body));
   const { provider, model, messages, userId, taskLabel } = req.body as {
     provider?: string;
     model?: string;
