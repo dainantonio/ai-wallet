@@ -86,7 +86,7 @@ const USAGE_PROVIDERS = ["OpenAI", "Anthropic", "Gemini"];
 const PROMPT_COST_RATES = [
   { provider: "OpenAI",    model: "GPT-4o",            inRate: 0.000050,  outRate: 0.000150  },
   { provider: "Anthropic", model: "Claude 3.5 Sonnet", inRate: 0.000075,  outRate: 0.000240  },
-  { provider: "Gemini",    model: "Gemini 1.5 Pro",    inRate: 0.0000125, outRate: 0.0000375 },
+  { provider: "Gemini",    model: "Gemini 2.5 Flash",  inRate: 0.0000125, outRate: 0.0000375 },
 ];
 
 function fmtCost(cost: number): string {
@@ -478,8 +478,8 @@ function CostPreviewPanel({ avgCost }: { avgCost: number }) {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          provider: "anthropic",
-          model: "claude-haiku-4-5-20251001",
+          provider: "gemini",
+          model: "gemini-2.5-flash",
           messages: [{
             role: "user",
             content: `Shorten this prompt to use fewer tokens while keeping the same meaning. Return only the shortened prompt, nothing else: ${text}`,
@@ -1060,8 +1060,8 @@ function AgentChat({ wallet, data, onOptimize, onModeSwitch }: AgentChatProps) {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          provider: "anthropic",
-          model: "claude-haiku-4-5-20251001",
+          provider: "gemini",
+          model: "gemini-2.5-flash",
           messages: [
             { role: "system", content: buildSystemPrompt(wallet, data) },
             ...history,
