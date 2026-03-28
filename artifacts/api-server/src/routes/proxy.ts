@@ -10,7 +10,7 @@ const router: IRouter = Router();
 const RATES: Record<string, { inRate: number; outRate: number; defaultModel: string; dbProvider: string }> = {
   openai:    { inRate: 0.000050,  outRate: 0.000150,  defaultModel: "gpt-4o",                     dbProvider: "OpenAI"    },
   anthropic: { inRate: 0.000075,  outRate: 0.000240,  defaultModel: "claude-3-5-sonnet-20241022",  dbProvider: "Anthropic" },
-  gemini:    { inRate: 0.0000125, outRate: 0.0000375, defaultModel: "gemini-1.5-pro",              dbProvider: "Google"    },
+  gemini:    { inRate: 0.0000125, outRate: 0.0000375, defaultModel: "gemini-2.0-flash",             dbProvider: "Google"    },
 };
 
 function calcCost(provider: string, inputTokens: number, outputTokens: number): number {
