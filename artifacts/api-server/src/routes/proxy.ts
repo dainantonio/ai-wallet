@@ -11,7 +11,7 @@ const router: IRouter = Router();
 const RATES: Record<string, { inRate: number; outRate: number; defaultModel: string; dbProvider: string }> = {
   openai:    { inRate: 0.000050,  outRate: 0.000150,  defaultModel: "gpt-4o",                     dbProvider: "OpenAI"    },
   anthropic: { inRate: 0.000075,  outRate: 0.000240,  defaultModel: "claude-3-5-sonnet-20241022",  dbProvider: "Anthropic" },
-  gemini:    { inRate: 0.0000125, outRate: 0.0000375, defaultModel: "gemini-2.5-flash",             dbProvider: "Google"    },
+  gemini:    { inRate: 0.0000125, outRate: 0.0000375, defaultModel: "gemini-1.5-flash",             dbProvider: "Google"    },
 };
 
 function calcCost(provider: string, inputTokens: number, outputTokens: number): number {
@@ -70,7 +70,6 @@ function sanitiseBody(body: Record<string, unknown>): Record<string, unknown> {
 
 // ─── POST /api/proxy/chat ─────────────────────────────────────────────────────
 router.post("/proxy/chat", async (req: Request, res: Response) => {
-  console.log("[proxy] incoming body:", JSON.stringify(req.body));
   const { provider, model, messages, userId, taskLabel } = req.body as {
     provider?: string;
     model?: string;

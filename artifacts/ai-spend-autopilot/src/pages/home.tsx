@@ -1357,7 +1357,7 @@ function AgentChat({ wallet, data, onOptimize, onModeSwitch }: AgentChatProps) {
         credentials: "include",
         body: JSON.stringify({
           provider: "gemini",
-          model: "gemini-2.5-flash",
+          model: "gemini-1.5-flash",
           messages: [
             { role: "system", content: buildSystemPrompt(wallet, data) },
             ...history,
