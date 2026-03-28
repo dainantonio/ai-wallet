@@ -12,7 +12,7 @@ import {
   TriangleAlert, XCircle, Gauge, Leaf, Flame,
   CreditCard, Receipt, ArrowDownRight, ArrowUpRight,
   Play, Plus, RefreshCw, X, ShieldCheck, FlaskConical, Copy,
-  Minimize2, Maximize2, Globe,
+  Minimize2, Maximize2, Globe, Calendar,
 } from "lucide-react";
 import { motion, AnimatePresence, animate as motionAnimate } from "framer-motion";
 import type { UsageData } from "@workspace/api-client-react/src/generated/api.schemas";
@@ -710,6 +710,238 @@ function CostPreviewPanel({ avgCost }: { avgCost: number }) {
           </motion.p>
         )}
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ─── Intelligence Feed ────────────────────────────────────────────────────────
+
+type InsightLevel = "info" | "warning" | "savings";
+
+interface Insight {
+  id: string;
+  level: InsightLevel;
+  icon: React.ElementType;
+  text: string;
+  generatedAt: number;
+}
+
+const INSIGHT_STYLES: Record<InsightLevel, { border: string; bg: string; iconCls: string; badge: string }> = {
+  info:    { border: "border-blue-500/20",   bg: "bg-blue-500/5",   iconCls: "text-blue-400 bg-blue-400/12",   badge: "bg-blue-500/15 text-blue-400"    },
+  warning: { border: "border-yellow-500/20", bg: "bg-yellow-500/5", iconCls: "text-yellow-400 bg-yellow-400/12", badge: "bg-yellow-500/15 text-yellow-400" },
+  savings: { border: "border-success/20",    bg: "bg-success/5",    iconCls: "text-success bg-success/12",     badge: "bg-success/15 text-success"       },
+};
+
+const INDUSTRY_AVG_COST = 0.03;
+const EXPENSIVE_PROVIDERS = new Set(["OpenAI", "Anthropic"]);
+
+function buildInsights(
+  transactions: WalletTx[],
+  dataAvgCost: number,
+  totalSaved: number,
+  now: number,
+): Insight[] {
+  const usageTxs = transactions.filter(t => t.type === "usage");
+  const optTxs   = transactions.filter(t => t.type === "optimization");
+
+  // Derived stats
+  const sessionAvgCost = usageTxs.length > 0
+    ? usageTxs.reduce((s, t) => s + Math.abs(t.amount), 0) / usageTxs.length
+    : dataAvgCost;
+
+  const expensiveSmallCount = usageTxs.filter(
+    t => EXPENSIVE_PROVIDERS.has(t.provider) && Math.abs(t.amount) < 0.025,
+  ).length;
+  const expPct = usageTxs.length > 0
+    ? Math.round((expensiveSmallCount / usageTxs.length) * 100)
+    : 0;
+
+  const providerTotals: Record<string, number> = {};
+  usageTxs.forEach(t => {
+    if (t.provider && t.provider !== "AI Wallet" && t.provider !== "Wallet") {
+      providerTotals[t.provider] = (providerTotals[t.provider] ?? 0) + Math.abs(t.amount);
+    }
+  });
+  const topProvider = Object.entries(providerTotals).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+  // Monthly projection: session average × estimated 40 calls/day × 30 days
+  const DAILY_CALL_EST = 40;
+  const monthlyEst = sessionAvgCost * DAILY_CALL_EST * 30;
+
+  const list: Insight[] = [];
+
+  // 1. Expensive model for simple tasks
+  list.push({
+    id: "expensive-simple",
+    level: expPct > 50 ? "warning" : expPct > 20 ? "info" : "savings",
+    icon: BrainCircuit,
+    text: usageTxs.length < 2
+      ? `Not enough session data yet — run more tasks for model efficiency analysis.`
+      : expPct > 50
+      ? `You use expensive models (OpenAI/Anthropic) for ${expPct}% of low-cost tasks. Lighter models could handle these for less.`
+      : expPct > 0
+      ? `${expPct}% of your small tasks use premium models — a light model would cost ~60% less.`
+      : `All your tasks this session matched cost-appropriate model tiers. Efficient!`,
+    generatedAt: now,
+  });
+
+  // 2. Avg cost vs industry benchmark
+  list.push({
+    id: "avg-cost",
+    level: sessionAvgCost > INDUSTRY_AVG_COST * 1.5 ? "warning"
+         : sessionAvgCost > INDUSTRY_AVG_COST        ? "info"
+         :                                              "savings",
+    icon: sessionAvgCost > INDUSTRY_AVG_COST ? TrendingDown : CheckCircle2,
+    text: sessionAvgCost > INDUSTRY_AVG_COST
+      ? `Your average prompt costs $${sessionAvgCost.toFixed(3)} — the industry average is $${INDUSTRY_AVG_COST.toFixed(2)}. Consider lighter models for routine tasks.`
+      : `Your average prompt costs $${sessionAvgCost.toFixed(3)} — below the $${INDUSTRY_AVG_COST.toFixed(2)} industry average. You're spending efficiently.`,
+    generatedAt: now - 800,
+  });
+
+  // 3. Optimization activity
+  list.push({
+    id: "opt-count",
+    level: optTxs.length > 0 ? "savings" : "info",
+    icon: Zap,
+    text: optTxs.length > 0
+      ? `You've made ${optTxs.length} optimization move${optTxs.length > 1 ? "s" : ""} this session, saving $${totalSaved.toFixed(2)} in total.`
+      : `No optimization moves yet this session. Click "Optimize Spend" to find savings.`,
+    generatedAt: now - 1600,
+  });
+
+  // 4. Top spending provider
+  list.push({
+    id: "top-provider",
+    level: topProvider === "OpenAI" || topProvider === "Anthropic" ? "warning" : "info",
+    icon: ArrowUpRight,
+    text: topProvider
+      ? `Top spending provider this session: ${topProvider}. ${
+          topProvider === "Gemini"
+            ? "Gemini is among the most cost-efficient choices — well optimized."
+            : topProvider === "OpenAI"
+            ? "Routing ~30% of GPT-4o calls to Gemini Flash could cut costs significantly."
+            : "Claude excels at complex tasks — reserve it for those to control spend."
+        }`
+      : `No provider data yet — run some tasks to see spend distribution.`,
+    generatedAt: now - 2400,
+  });
+
+  // 5. Monthly projection
+  list.push({
+    id: "monthly-est",
+    level: monthlyEst > 150 ? "warning" : monthlyEst > 60 ? "info" : "savings",
+    icon: Calendar,
+    text: `Estimated monthly cost at current rate: $${monthlyEst.toFixed(2)}${
+      monthlyEst > 150 ? " — Saver Mode could reduce this by up to 50%." :
+      monthlyEst > 60  ? " — enabling Smart Routing could trim this further." :
+      " — you're on track for a low-spend month."
+    }`,
+    generatedAt: now - 3200,
+  });
+
+  return list;
+}
+
+function IntelligenceFeed({
+  transactions, avgCost, totalSaved,
+}: {
+  transactions: WalletTx[];
+  avgCost: number;
+  totalSaved: number;
+}) {
+  const [refreshTs, setRefreshTs] = useState(() => Date.now());
+  const [, setTickCount]          = useState(0);
+  const prevLenRef                = useRef(transactions.length);
+
+  // 60-second auto-refresh
+  useEffect(() => {
+    const t = setInterval(() => setRefreshTs(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Refresh immediately when new transactions arrive
+  useEffect(() => {
+    if (transactions.length !== prevLenRef.current) {
+      prevLenRef.current = transactions.length;
+      setRefreshTs(Date.now());
+    }
+  }, [transactions.length]);
+
+  // Tick every 15 s so "X ago" labels stay fresh
+  useEffect(() => {
+    const t = setInterval(() => setTickCount(v => v + 1), 15_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const insightList = useMemo(
+    () => buildInsights(transactions, avgCost, totalSaved, refreshTs),
+    [transactions, avgCost, totalSaved, refreshTs],
+  );
+
+  function fmtAge(ts: number) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 5)  return "just now";
+    if (s < 60) return `${s}s ago`;
+    return `${Math.floor(s / 60)}m ago`;
+  }
+
+  const secondsSince = Math.floor((Date.now() - refreshTs) / 1000);
+  const nextRefreshIn = Math.max(0, 60 - secondsSince);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.52 }}
+      className="glass-panel rounded-2xl p-6 mb-6"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <BrainCircuit className="w-5 h-5 text-primary" />
+          <h2 className="text-xl font-display font-bold text-foreground">Intelligence Feed</h2>
+          <span className="text-xs text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
+            {insightList.length} insights
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-pulse" />
+          {nextRefreshIn > 0 ? `refreshes in ${nextRefreshIn}s` : "refreshing…"} · {transactions.length} tx analyzed
+        </div>
+      </div>
+
+      {/* Feed */}
+      <div className="space-y-2.5">
+        <AnimatePresence mode="sync" initial={false}>
+          {insightList.map((insight, i) => {
+            const s    = INSIGHT_STYLES[insight.level];
+            const Icon = insight.icon;
+            return (
+              <motion.div
+                key={`${insight.id}-${refreshTs}`}
+                initial={{ opacity: 0, x: -14 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 14 }}
+                transition={{ delay: i * 0.055, duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                className={`flex items-start gap-3.5 p-4 rounded-xl border transition-colors duration-300 ${s.border} ${s.bg}`}
+              >
+                <div className={`p-2.5 rounded-xl flex-shrink-0 mt-0.5 ${s.iconCls}`}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-foreground leading-relaxed">{insight.text}</p>
+                  <p className="text-[10px] text-muted-foreground/50 mt-1.5">
+                    {fmtAge(insight.generatedAt)}
+                  </p>
+                </div>
+                <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${s.badge}`}>
+                  {insight.level === "savings" ? "savings" : insight.level}
+                </span>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 }
@@ -2097,10 +2329,18 @@ function HomeInner({ data }: { data: UsageData }) {
           {transactions.length === 0 && (
             <div className="text-center py-8 text-muted-foreground text-sm">
               No transactions yet — click an action above to get started.
+
             </div>
           )}
         </div>
       </motion.div>
+
+      {/* ── Intelligence Feed ── */}
+      <IntelligenceFeed
+        transactions={transactions}
+        avgCost={data.avgCost}
+        totalSaved={totalSaved}
+      />
 
       {/* ── Pre-Flight Modal ── */}
       <AnimatePresence>
