@@ -43,7 +43,7 @@ if (fs.existsSync(frontendDist)) {
   // Static assets with long cache (hashed filenames from Vite)
   app.use(express.static(frontendDist, { maxAge: "1y", immutable: true }));
   // SPA fallback — all non-API routes serve index.html
-  app.get("*splat", (_req, res) => {
+  app.get("/{*path}", (_req, res) => {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
   logger.info({ frontendDist }, "Serving frontend static files");
