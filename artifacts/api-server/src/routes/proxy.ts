@@ -100,8 +100,8 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
     if (provider === "openai") {
       const apiKey = (await getUserApiKey(resolvedUserId, "openai")) ?? process.env.OPENAI_API_KEY;
       if (!apiKey) {
-        console.error("[proxy] 400 openai key missing — userId:", resolvedUserId, "OPENAI_API_KEY set:", !!process.env.OPENAI_API_KEY);
-        res.status(400).json({ error: "Provider not configured: OPENAI_API_KEY is not set" });
+        console.error("[proxy] openai key missing — userId:", resolvedUserId, "OPENAI_API_KEY set:", !!process.env.OPENAI_API_KEY);
+        res.status(503).json({ error: "Provider not configured: OPENAI_API_KEY is not set. Add it in Replit Secrets or .env" });
         return;
       }
 
@@ -126,8 +126,8 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
     if (provider === "anthropic") {
       const apiKey = (await getUserApiKey(resolvedUserId, "anthropic")) ?? process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
-        console.error("[proxy] 400 anthropic key missing — userId:", resolvedUserId, "ANTHROPIC_API_KEY set:", !!process.env.ANTHROPIC_API_KEY);
-        res.status(400).json({ error: "Provider not configured: ANTHROPIC_API_KEY is not set" });
+        console.error("[proxy] anthropic key missing — userId:", resolvedUserId, "ANTHROPIC_API_KEY set:", !!process.env.ANTHROPIC_API_KEY);
+        res.status(503).json({ error: "Provider not configured: ANTHROPIC_API_KEY is not set. Add it in Replit Secrets or .env" });
         return;
       }
 
@@ -159,10 +159,15 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
 
     // ── Gemini ──────────────────────────────────────────────────────────────
     if (provider === "gemini") {
-      const apiKey = (await getUserApiKey(resolvedUserId, "google")) ?? process.env.GEMINI_API_KEY;
+      // Accept GEMINI_API_KEY or GOOGLE_API_KEY (Replit exposes it under the latter name)
+      const apiKey = (await getUserApiKey(resolvedUserId, "google"))
+        ?? process.env.GEMINI_API_KEY
+        ?? process.env.GOOGLE_API_KEY;
       if (!apiKey) {
-        console.error("[proxy] 400 gemini key missing — userId:", resolvedUserId, "GEMINI_API_KEY set:", !!process.env.GEMINI_API_KEY);
-        res.status(400).json({ error: "Provider not configured: GEMINI_API_KEY is not set" });
+        console.error("[proxy] gemini key missing — userId:", resolvedUserId,
+          "GEMINI_API_KEY set:", !!process.env.GEMINI_API_KEY,
+          "GOOGLE_API_KEY set:", !!process.env.GOOGLE_API_KEY);
+        res.status(503).json({ error: "Provider not configured: set GEMINI_API_KEY (or GOOGLE_API_KEY) in Replit Secrets or .env" });
         return;
       }
 
