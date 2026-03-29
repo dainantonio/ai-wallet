@@ -1,9 +1,9 @@
 import { Link, useLocation } from "wouter";
-import { Wallet, Home, Sparkles, BarChart3, BellRing, FlaskConical, Settings, LogOut, User, FolderKanban, Gem } from "lucide-react";
+import { Wallet, Home, Sparkles, BarChart3, BellRing, FlaskConical, Settings, LogOut, User, FolderKanban, Gem, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useAuthContext } from "@/App";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trackEvent } from "@/lib/analytics";
 
 const NAV_ITEMS = [
@@ -20,9 +20,12 @@ const NAV_ITEMS = [
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user, logout } = useAuthContext();
+  const [showMobileMore, setShowMobileMore] = useState(false);
   useEffect(() => {
     trackEvent("page_view", { path: location });
   }, [location]);
+  const mobilePrimaryItems = useMemo(() => NAV_ITEMS.slice(0, 4), []);
+  const mobileOverflowItems = useMemo(() => NAV_ITEMS.slice(4), []);
 
   const displayName = user?.firstName
     ? `${user.firstName}${user.lastName ? " " + user.lastName : ""}`
@@ -149,11 +152,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {/* Mobile Bottom Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-panel border-t border-border/50 pb-safe">
         <div className="flex justify-around items-center p-3">
-          {NAV_ITEMS.map((item) => {
+          {mobilePrimaryItems.map((item) => {
             const isActive = location === item.path;
             const Icon = item.icon;
             return (
-              <Link key={item.path} href={item.path} className="flex-1 flex justify-center">
+              <Link key={item.path} href={item.path} className="flex-1 flex justify-center" onClick={() => setShowMobileMore(false)}>
                 <div className="relative p-2 flex flex-col items-center gap-1">
                   {isActive && (
                     <motion.div layoutId="mobile-active"
@@ -168,6 +171,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          <button onClick={() => setShowMobileMore(v => !v)} className="flex-1 flex justify-center">
+            <div className="p-2 flex flex-col items-center gap-1">
+              <MoreHorizontal className={cn("w-6 h-6", showMobileMore ? "text-primary" : "text-muted-foreground")} />
+              <span className={cn("text-[10px] font-medium", showMobileMore ? "text-primary" : "text-muted-foreground")}>More</span>
+            </div>
+          </button>
           {/* Mobile logout */}
           <button onClick={logout} className="flex-1 flex justify-center">
             <div className="p-2 flex flex-col items-center gap-1">
@@ -176,6 +185,27 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </div>
           </button>
         </div>
+        {showMobileMore && (
+          <div className="px-3 pb-3 grid grid-cols-2 gap-2 border-t border-border/40 pt-2">
+            {mobileOverflowItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = location === item.path;
+              return (
+                <Link key={item.path} href={item.path} onClick={() => setShowMobileMore(false)}>
+                  <div className={cn(
+                    "flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold border",
+                    isActive
+                      ? "bg-primary/10 text-primary border-primary/30"
+                      : "bg-secondary/50 text-muted-foreground border-border/40",
+                  )}>
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{item.label}</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </nav>
     </div>
   );
