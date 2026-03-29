@@ -35,34 +35,34 @@ const PROVIDERS = [
 const STEPS = [
   {
     num: "01",
-    icon: <PlugZap className="w-5 h-5" />,
-    title: "Connect your providers",
-    body: "Link your OpenAI, Anthropic, Gemini, and other API keys in seconds. No code changes required.",
-    color: "text-blue-400 bg-blue-400/10 border-blue-400/20",
+    icon: <span className="text-xl leading-none">💼</span>,
+    title: "Per-project cost tracking",
+    body: "Tag your API calls by client or project. Know exactly what you're spending on each engagement before you send the invoice.",
+    color: "text-blue-500 bg-blue-500/10 border-blue-500/20",
   },
   {
     num: "02",
-    icon: <Eye className="w-5 h-5" />,
-    title: "See cost before you spend",
-    body: "Every task shows an estimated cost and a cheaper alternative before it runs. You're always in control.",
+    icon: <span className="text-xl leading-none">🧾</span>,
+    title: "Export costs for invoicing",
+    body: "One-click CSV export with a full breakdown of AI spend per project — ready to attach to your client invoice.",
     color: "text-violet-400 bg-violet-400/10 border-violet-400/20",
   },
   {
     num: "03",
-    icon: <Sparkles className="w-5 h-5" />,
-    title: "Savings happen automatically",
-    body: "AI Wallet routes requests to cheaper models, batches calls, and caches responses — while you focus on building.",
-    color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
+    icon: <span className="text-xl leading-none">⚡</span>,
+    title: "Real-time spend alerts",
+    body: "Set per-project budgets and get alerted before you go over. Never eat AI costs that should be on a client bill.",
+    color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
   },
 ];
 
 const BENEFITS = [
   {
     icon: <BadgeDollarSign className="w-5 h-5" />,
-    title: "Stop overspending",
-    body: "Set monthly budgets and get real-time alerts before you hit your limit. No surprise bills at end of month.",
-    color: "text-emerald-400",
-    bg: "bg-emerald-400/8 border-emerald-400/20",
+    title: "Bill back with confidence",
+    body: "Know your exact AI spend per client project. No more guessing when it's time to invoice.",
+    color: "text-emerald-500",
+    bg: "bg-emerald-500/8 border-emerald-500/20",
   },
   {
     icon: <TrendingDown className="w-5 h-5" />,
@@ -73,29 +73,29 @@ const BENEFITS = [
   },
   {
     icon: <Activity className="w-5 h-5" />,
-    title: "Live spend feed",
-    body: "Every API call tracked in real time — amount, provider, and type — so you always know where money goes.",
-    color: "text-blue-400",
-    bg: "bg-blue-400/8 border-blue-400/20",
+    title: "Live spend by project",
+    body: "Every API call tracked in real time — tagged by client, provider, and type — so you always know where money goes.",
+    color: "text-blue-500",
+    bg: "bg-blue-500/8 border-blue-500/20",
   },
   {
     icon: <SlidersHorizontal className="w-5 h-5" />,
     title: "Spend modes",
-    body: "Flip between Saver, Balanced, and Performance modes to match your cost vs. quality needs at any time.",
-    color: "text-orange-400",
-    bg: "bg-orange-400/8 border-orange-400/20",
+    body: "Flip between Saver, Balanced, and Performance modes to match your cost vs. quality needs on any project.",
+    color: "text-orange-500",
+    bg: "bg-orange-500/8 border-orange-500/20",
   },
   {
     icon: <Bell className="w-5 h-5" />,
-    title: "Budget alerts",
-    body: "Configurable thresholds notify you before costs spiral. Stay on track every month without manual checks.",
-    color: "text-yellow-400",
-    bg: "bg-yellow-400/8 border-yellow-400/20",
+    title: "Per-client budget alerts",
+    body: "Set per-project caps and get notified before you go over. Protect your margins on every engagement.",
+    color: "text-amber-500",
+    bg: "bg-amber-500/8 border-amber-500/20",
   },
   {
     icon: <Shield className="w-5 h-5" />,
-    title: "Pre-flight checks",
-    body: "A cost estimate and optimization suggestion appears before every task runs — so you can approve or swap providers.",
+    title: "Pre-flight cost checks",
+    body: "See an AI cost estimate before every task runs — so you can approve, swap providers, or pass it to the client.",
     color: "text-violet-400",
     bg: "bg-violet-400/8 border-violet-400/20",
   },
@@ -176,7 +176,7 @@ export default function LoginPage({ onLogin, onDemo }: { onLogin: () => void; on
           className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-primary/30 bg-primary/8 text-xs font-semibold text-primary mb-8"
         >
           <Zap className="w-3 h-3" />
-          Smart AI cost management, built for builders
+          Built for freelancers &amp; consultants
         </motion.div>
 
         {/* Headline */}
@@ -185,11 +185,11 @@ export default function LoginPage({ onLogin, onDemo }: { onLogin: () => void; on
           transition={{ duration: 0.6, delay: 0.05 }}
           className="text-4xl sm:text-5xl md:text-6xl font-display font-black text-foreground leading-[1.05] tracking-tight mb-6 max-w-3xl mx-auto"
         >
-          Never Run Out of{" "}
+          Know Exactly What Every{" "}
           <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-indigo-400 to-violet-400">
-            AI Tokens
+            Client Project
           </span>{" "}
-          Again
+          Costs in AI
         </motion.h1>
 
         {/* Subtext */}
@@ -198,7 +198,7 @@ export default function LoginPage({ onLogin, onDemo }: { onLogin: () => void; on
           transition={{ duration: 0.55, delay: 0.15 }}
           className="text-lg sm:text-xl text-muted-foreground max-w-xl mx-auto mb-10 leading-relaxed"
         >
-          AI Wallet shows your cost before you spend and helps you save automatically.
+          AI Wallet tracks your spend across ChatGPT, Claude, and Gemini — so you can bill it back with confidence.
         </motion.p>
 
         {/* Email form */}
@@ -243,19 +243,25 @@ export default function LoginPage({ onLogin, onDemo }: { onLogin: () => void; on
           <p className="text-xs text-muted-foreground/60">No spam. Unsubscribe any time.</p>
         </motion.div>
 
-        {/* Demo link */}
+        {/* Second CTA + social proof */}
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
+          className="flex flex-col items-center gap-3"
         >
-          <button
+          <motion.button
             onClick={onDemo}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-primary transition-colors group"
+            whileTap={{ scale: 0.97 }}
+            whileHover={{ scale: 1.02 }}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl border border-primary/30 bg-primary/8 text-primary font-semibold text-sm hover:bg-primary/15 hover:border-primary/50 transition-all group"
           >
-            <Sparkles className="w-4 h-4 text-primary" />
-            Or try the live demo instantly — no account needed
+            <Sparkles className="w-4 h-4" />
+            Try live demo — no signup needed
             <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-          </button>
+          </motion.button>
+          <p className="text-xs text-muted-foreground/50">
+            Trusted by freelancers, consultants, and indie developers
+          </p>
         </motion.div>
 
         {/* Provider badges */}
@@ -280,9 +286,9 @@ export default function LoginPage({ onLogin, onDemo }: { onLogin: () => void; on
         </div>
 
         <FadeIn className="text-center mb-16">
-          <p className="text-xs font-bold text-primary uppercase tracking-widest mb-3">How it works</p>
+          <p className="text-xs font-bold text-primary uppercase tracking-widest mb-3">What you get</p>
           <h2 className="text-3xl sm:text-4xl font-display font-black text-foreground">
-            From chaos to control in 3 steps
+            Everything freelancers need to bill AI costs
           </h2>
         </FadeIn>
 
@@ -318,10 +324,10 @@ export default function LoginPage({ onLogin, onDemo }: { onLogin: () => void; on
         <FadeIn className="text-center mb-16">
           <p className="text-xs font-bold text-primary uppercase tracking-widest mb-3">Benefits</p>
           <h2 className="text-3xl sm:text-4xl font-display font-black text-foreground">
-            Everything you need to spend smarter
+            Stop guessing what AI costs your clients
           </h2>
           <p className="text-muted-foreground mt-3 max-w-lg mx-auto">
-            Built for solo developers and teams who are tired of guessing what their AI API bills will look like.
+            Built for freelancers and consultants who use AI tools for client work and need to track, justify, and recover those costs.
           </p>
         </FadeIn>
 
@@ -363,10 +369,10 @@ export default function LoginPage({ onLogin, onDemo }: { onLogin: () => void; on
                 No account required
               </div>
               <h2 className="text-3xl sm:text-4xl font-display font-black text-white mb-4">
-                See it in action right now
+                See your AI costs like never before
               </h2>
               <p className="text-white/60 text-lg mb-10 max-w-lg mx-auto">
-                The full dashboard — live balance, transaction feed, smart routing, spend modes — all with simulated data you can play with.
+                The full dashboard — project cost breakdowns, per-client spend, CSV export, and real-time alerts — all with demo data you can explore now.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
