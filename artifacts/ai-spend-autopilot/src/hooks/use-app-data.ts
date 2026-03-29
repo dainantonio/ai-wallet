@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getUsage, runOptimization } from "@workspace/api-client-react";
 import type { UsageData, OptimizationResult, ActivityItem } from "@workspace/api-client-react/src/generated/api.schemas";
+import { notifyApiError } from "@/lib/user-feedback";
 
 // ─── Cost summary types ───────────────────────────────────────────────────────
 export interface DailySpend {
@@ -76,7 +77,7 @@ export function useCostSummary() {
     queryKey: ["/api/costs/summary"],
     queryFn: async () => {
       const res = await fetch("/api/costs/summary", { credentials: "include" });
-      if (!res.ok) return EMPTY_SUMMARY;
+      if (!res.ok) { notifyApiError(); return EMPTY_SUMMARY; }
       return res.json() as Promise<CostSummary>;
     },
     refetchInterval: 30_000,
@@ -93,6 +94,7 @@ export function useUsageData() {
         return data;
       } catch (error) {
         console.warn("Failed to fetch /api/usage, using simulated data.", error);
+        notifyApiError();
         return MOCK_USAGE_DATA;
       }
     },
@@ -109,6 +111,7 @@ export function useOptimize() {
         return await runOptimization();
       } catch (error) {
         console.warn("Failed to call /api/optimize, simulating response.", error);
+        notifyApiError();
         // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 800));
         
