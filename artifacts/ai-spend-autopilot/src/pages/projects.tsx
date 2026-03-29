@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { Shell } from "@/components/layout/Shell";
 import { useAuthContext } from "@/App";
 import { motion, AnimatePresence } from "framer-motion";
-import { FolderKanban, Plus, Trash2, X, ChevronRight, BarChart3, Loader2 } from "lucide-react";
+import { FolderKanban, Plus, Trash2, X, ChevronRight, BarChart3, Loader2, Download, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { exportCostsCsv } from "@/lib/export";
+import { InvoiceModal } from "@/components/InvoiceModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Project {
@@ -251,10 +253,13 @@ function ProjectDetail({ project, onClose, onDeleted }: {
 // ─── Projects Page ────────────────────────────────────────────────────────────
 export default function ProjectsPage() {
   const { isDemo } = useAuthContext();
-  const [projects, setProjects]       = useState<Project[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [showNew, setShowNew]         = useState(false);
-  const [selected, setSelected]       = useState<Project | null>(null);
+  const [projects, setProjects]             = useState<Project[]>([]);
+  const [loading, setLoading]               = useState(true);
+  const [showNew, setShowNew]               = useState(false);
+  const [selected, setSelected]             = useState<Project | null>(null);
+  const [invoiceProject, setInvoiceProject] = useState<Project | null>(null);
+  const [exportingId, setExportingId]       = useState<string | null>(null);
+  const [exportError, setExportError]       = useState<string | null>(null);
 
   const loadProjects = useCallback(() => {
     if (isDemo) { setLoading(false); return; }
@@ -266,6 +271,23 @@ export default function ProjectsPage() {
   }, [isDemo]);
 
   useEffect(() => { loadProjects(); }, [loadProjects]);
+
+  const handleExport = async (project: Project, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExportingId(project.id);
+    setExportError(null);
+    try {
+      await exportCostsCsv({
+        projectId: project.id,
+        filename: `ai-wallet-${project.name.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`,
+      });
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed");
+      setTimeout(() => setExportError(null), 4000);
+    } finally {
+      setExportingId(null);
+    }
+  };
 
   return (
     <Shell>
@@ -285,6 +307,18 @@ export default function ProjectsPage() {
             New Project
           </motion.button>
         </div>
+
+        {/* Export error toast */}
+        <AnimatePresence>
+          {exportError && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              className="rounded-xl bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive font-medium"
+            >
+              {exportError}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Demo notice */}
         {isDemo && (
@@ -328,28 +362,53 @@ export default function ProjectsPage() {
         {!loading && projects.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {projects.map((project, i) => (
-              <motion.button
+              <motion.div
                 key={project.id}
                 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
-                onClick={() => setSelected(project)}
-                className="stat-card-premium rounded-2xl p-5 text-left group hover:border-primary/30 transition-all"
+                className="stat-card-premium rounded-2xl p-5 group hover:border-primary/30 transition-all flex flex-col"
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${project.color}20`, border: `1px solid ${project.color}40` }}>
-                    <FolderKanban className="w-5 h-5" style={{ color: project.color }} />
+                {/* Card top — clickable for detail */}
+                <button className="text-left flex-1" onClick={() => setSelected(project)}>
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: `${project.color}20`, border: `1px solid ${project.color}40` }}>
+                      <FolderKanban className="w-5 h-5" style={{ color: project.color }} />
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-60 transition-opacity mt-1" />
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
+                  <h3 className="font-display font-bold text-foreground text-base leading-tight mb-0.5">{project.name}</h3>
+                  {project.clientName && (
+                    <p className="text-xs text-muted-foreground">{project.clientName}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Created {new Date(project.createdAt).toLocaleDateString()}
+                  </p>
+                </button>
+
+                {/* Action buttons */}
+                <div className="flex gap-2 mt-4 pt-3 border-t border-white/[0.06]">
+                  <motion.button
+                    whileTap={{ scale: 0.94 }}
+                    onClick={e => handleExport(project, e)}
+                    disabled={exportingId === project.id}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-secondary/70 border border-border/40 text-muted-foreground text-xs font-semibold hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+                  >
+                    {exportingId === project.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Download className="w-3.5 h-3.5" />}
+                    Export CSV
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.94 }}
+                    onClick={e => { e.stopPropagation(); setInvoiceProject(project); }}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 border border-primary/25 text-primary text-xs font-semibold hover:bg-primary/18 transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    Invoice
+                  </motion.button>
                 </div>
-                <h3 className="font-display font-bold text-foreground text-base leading-tight mb-0.5">{project.name}</h3>
-                {project.clientName && (
-                  <p className="text-xs text-muted-foreground">{project.clientName}</p>
-                )}
-                <p className="text-xs text-muted-foreground mt-3">
-                  Created {new Date(project.createdAt).toLocaleDateString()}
-                </p>
-              </motion.button>
+              </motion.div>
             ))}
           </div>
         )}
@@ -368,6 +427,14 @@ export default function ProjectsPage() {
             project={selected}
             onClose={() => setSelected(null)}
             onDeleted={id => setProjects(prev => prev.filter(p => p.id !== id))}
+          />
+        )}
+        {invoiceProject && (
+          <InvoiceModal
+            projectId={invoiceProject.id}
+            projectName={invoiceProject.name}
+            clientName={invoiceProject.clientName}
+            onClose={() => setInvoiceProject(null)}
           />
         )}
       </AnimatePresence>

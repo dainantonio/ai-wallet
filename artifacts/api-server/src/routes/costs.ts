@@ -233,4 +233,51 @@ router.get("/costs/monthly-summary", async (req: Request, res: Response) => {
   }
 });
 
+// ─── GET /api/costs/export ───────────────────────────────────────────────────
+// Returns raw cost log rows for CSV download.
+// Query params: projectId (uuid), startDate (ISO), endDate (ISO) — all optional.
+router.get("/costs/export", async (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!db) { res.json([]); return; }
+
+  const { projectId, startDate, endDate } = req.query as {
+    projectId?: string; startDate?: string; endDate?: string;
+  };
+
+  const userId = req.user.id;
+
+  // Null-safe conditional filters — "x IS NULL OR condition" means "skip filter when param absent"
+  try {
+    const result = await db.execute<{
+      created_at: string; provider: string; model: string; label: string | null;
+      input_tokens: number; output_tokens: number; cost: number; saved: number;
+      project_name: string | null;
+    }>(sql`
+      SELECT
+        l.created_at,
+        l.provider,
+        l.model,
+        l.label,
+        l.input_tokens,
+        l.output_tokens,
+        l.cost,
+        l.saved,
+        p.name AS project_name
+      FROM ai_cost_logs l
+      LEFT JOIN projects p ON l.project_id = p.id
+      WHERE l.user_id = ${userId}
+        AND (${projectId ?? null} IS NULL OR l.project_id = (${projectId ?? null})::uuid)
+        AND (${startDate ?? null} IS NULL OR l.created_at >= (${startDate ?? null})::timestamptz)
+        AND (${endDate   ?? null} IS NULL OR l.created_at <= (${endDate   ?? null})::timestamptz)
+      ORDER BY l.created_at DESC
+      LIMIT 10000
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("[costs/export]", err);
+    res.status(500).json({ error: "Export failed" });
+  }
+});
+
 export default router;

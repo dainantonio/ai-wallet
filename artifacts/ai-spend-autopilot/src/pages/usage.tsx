@@ -1,16 +1,19 @@
+import { useState } from "react";
 import { Shell } from "@/components/layout/Shell";
 import { useUsageData, useCostSummary } from "@/hooks/use-app-data";
 import type { DailySpend, ModelSpend } from "@/hooks/use-app-data";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { ActivityFeed } from "@/components/ui/ActivityFeed";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import {
   Cpu, ServerCrash, Clock, TrendingDown, Database,
   CalendarDays, Zap, ArrowUpRight, Flame, Sparkles, Trophy,
+  Download, Loader2, ChevronDown,
 } from "lucide-react";
+import { exportCostsCsv } from "@/lib/export";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtDay(iso: string) {
@@ -347,6 +350,14 @@ function SavingsHighlight({
   );
 }
 
+// ─── Date range options ───────────────────────────────────────────────────────
+const DATE_RANGES = [
+  { label: "Last 7 days",  days: 7  },
+  { label: "Last 30 days", days: 30 },
+  { label: "Last 90 days", days: 90 },
+  { label: "All time",     days: 0  },
+] as const;
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function Usage() {
   const { data: usageData, isLoading: usageLoading } = useUsageData();
@@ -355,6 +366,34 @@ export default function Usage() {
 
   const todayKey = new Date().toISOString().slice(0, 10);
   const todaySpend = costData?.daily?.find(d => d.day.slice(0, 10) === todayKey)?.total_cost ?? usageData?.avgCost ?? 0;
+
+  // ── Export state ──────────────────────────────────────────────────────────
+  const [selectedRange, setSelectedRange] = useState<number>(30);
+  const [showRangeMenu, setShowRangeMenu] = useState(false);
+  const [exporting, setExporting]         = useState(false);
+  const [exportMsg, setExportMsg]         = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const handleExport = async () => {
+    setExporting(true);
+    setExportMsg(null);
+    try {
+      const startDate = selectedRange > 0
+        ? new Date(Date.now() - selectedRange * 86_400_000).toISOString()
+        : undefined;
+      await exportCostsCsv({
+        startDate,
+        filename: `ai-wallet-export-${new Date().toISOString().slice(0, 10)}.csv`,
+      });
+      setExportMsg({ type: "success", text: "CSV downloaded successfully" });
+    } catch (err) {
+      setExportMsg({ type: "error", text: err instanceof Error ? err.message : "Export failed" });
+    } finally {
+      setExporting(false);
+      setTimeout(() => setExportMsg(null), 4000);
+    }
+  };
+
+  const rangeLabel = DATE_RANGES.find(r => r.days === selectedRange)?.label ?? "Last 30 days";
 
   if (usageLoading || !usageData) {
     return (
@@ -369,8 +408,64 @@ export default function Usage() {
   return (
     <Shell>
       <header className="mb-8">
-        <h1 className="text-3xl md:text-5xl font-display font-black tracking-tight heading-gradient">Usage &amp; Models</h1>
-        <p className="text-muted-foreground mt-2 text-sm">Real-time API consumption, spend tracking, and model distribution.</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-3xl md:text-5xl font-display font-black tracking-tight heading-gradient">Usage &amp; Models</h1>
+            <p className="text-muted-foreground mt-2 text-sm">Real-time API consumption, spend tracking, and model distribution.</p>
+          </div>
+          {/* Export controls */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Date range picker */}
+            <div className="relative">
+              <motion.button
+                onClick={() => setShowRangeMenu(v => !v)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-secondary border border-border/60 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {rangeLabel}
+                <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+              </motion.button>
+              <AnimatePresence>
+                {showRangeMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                    className="absolute top-full left-0 mt-2 z-30 rounded-xl border border-border/50 bg-card shadow-xl p-1.5 flex flex-col gap-0.5 min-w-[140px]"
+                  >
+                    {DATE_RANGES.map(r => (
+                      <button key={r.days}
+                        onClick={() => { setSelectedRange(r.days); setShowRangeMenu(false); }}
+                        className={`text-xs font-semibold px-3 py-2 rounded-lg transition-colors text-left ${selectedRange === r.days ? "bg-primary/20 text-primary" : "hover:bg-secondary text-muted-foreground hover:text-foreground"}`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            {/* Export button */}
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-lg shadow-primary/20"
+            >
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              Export CSV
+            </motion.button>
+          </div>
+        </div>
+        {/* Export feedback */}
+        <AnimatePresence>
+          {exportMsg && (
+            <motion.p
+              initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              className={`mt-3 text-sm font-medium ${exportMsg.type === "success" ? "text-emerald-400" : "text-destructive"}`}
+            >
+              {exportMsg.text}
+            </motion.p>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* ── Live cost stats (Supabase) ── */}
