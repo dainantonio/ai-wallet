@@ -77,7 +77,7 @@ export default function Autopilot() {
               <h2 className="text-2xl font-display font-bold">Airtable Connection</h2>
               <p className="text-sm text-muted-foreground mt-1">Sync usage data directly to your CRM.</p>
             </div>
-            <img src="https://upload.wikimedia.org/wikipedia/commons/4/4b/Airtable_Logo.svg" alt="Airtable" className="h-6 opacity-80 filter invert" />
+            <img src="https://upload.wikimedia.org/wikipedia/commons/4/4b/Airtable_Logo.svg" alt="Airtable" loading="lazy" className="h-6 opacity-80 filter invert" />
           </div>
 
           <div className="space-y-4 mb-8 flex-1">

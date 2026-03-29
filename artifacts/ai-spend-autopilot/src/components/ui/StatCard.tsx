@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { ReactNode } from "react";
+import { memo, ReactNode } from "react";
 import { motion } from "framer-motion";
 
 interface StatCardProps {
@@ -15,7 +15,7 @@ interface StatCardProps {
   delay?: number;
 }
 
-export function StatCard({ title, value, subtitle, icon, trend, className, delay = 0 }: StatCardProps) {
+export const StatCard = memo(function StatCard({ title, value, subtitle, icon, trend, className, delay = 0 }: StatCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -57,4 +57,4 @@ export function StatCard({ title, value, subtitle, icon, trend, className, delay
       </div>
     </motion.div>
   );
-}
+});
