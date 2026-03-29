@@ -1,6 +1,7 @@
 import {
   pgTable, uuid, text, integer, real, boolean, timestamp, index,
 } from "drizzle-orm/pg-core";
+import { projectsTable } from "./projects";
 
 // ─── ai_cost_logs — one row per simulated/real AI API call ───────────────────
 export const costLogsTable = pgTable(
@@ -23,6 +24,7 @@ export const costLogsTable = pgTable(
     optimized:    boolean("optimized").notNull().default(false),
 
     label:        text("label"),   // human-readable description
+    projectId:    uuid("project_id").references(() => projectsTable.id, { onDelete: "set null" }),
 
     createdAt:    timestamp("created_at", { withTimezone: true })
                     .notNull()

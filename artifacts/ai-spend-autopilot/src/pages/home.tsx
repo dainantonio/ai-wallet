@@ -12,7 +12,7 @@ import {
   TriangleAlert, XCircle, Gauge, Leaf, Flame,
   CreditCard, Receipt, ArrowDownRight, ArrowUpRight,
   Play, Plus, RefreshCw, X, ShieldCheck, FlaskConical, Copy,
-  Minimize2, Maximize2, Globe, Calendar, Send,
+  Minimize2, Maximize2, Globe, Calendar, Send, FolderKanban, ChevronDown,
 } from "lucide-react";
 import { motion, AnimatePresence, animate as motionAnimate } from "framer-motion";
 import type { UsageData } from "@workspace/api-client-react/src/generated/api.schemas";
@@ -1239,6 +1239,7 @@ interface AgentChatProps {
   data: UsageData;
   onOptimize: () => Promise<void>;
   onModeSwitch: (mode: SpendMode) => Promise<void>;
+  selectedProjectId?: string | null;
 }
 
 const QUICK_PROMPTS = [
@@ -1279,7 +1280,7 @@ function stripAction(raw: string): string {
   return raw.replace(/\{"action"\s*:\s*"[^"]*"(?:\s*,\s*"value"\s*:\s*"[^"]*")?\}\s*/g, "").trim();
 }
 
-function AgentChat({ wallet, data, onOptimize, onModeSwitch }: AgentChatProps) {
+function AgentChat({ wallet, data, onOptimize, onModeSwitch, selectedProjectId }: AgentChatProps) {
   const [isOpen,   setIsOpen]   = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input,    setInput]    = useState("");
@@ -1331,6 +1332,7 @@ function AgentChat({ wallet, data, onOptimize, onModeSwitch }: AgentChatProps) {
             ...history,
             { role: "user", content: trimmed },
           ],
+          ...(selectedProjectId ? { projectId: selectedProjectId } : {}),
         }),
       });
 
@@ -2001,6 +2003,21 @@ function HomeInner({ data }: { data: UsageData }) {
   const [isAddingFunds, setIsAddingFunds]   = useState(false);
   const [isOptimizing, setIsOptimizing]     = useState(false);
 
+  // ── Project selector ─────────────────────────────────────────────────────
+  const [projects, setProjects]             = useState<{ id: string; name: string; clientName: string | null; color: string }[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [showProjectMenu, setShowProjectMenu] = useState(false);
+
+  useEffect(() => {
+    if (isDemo) return;
+    fetch("/api/projects", { credentials: "include" })
+      .then(r => r.ok ? r.json() : [])
+      .then(setProjects)
+      .catch(() => {});
+  }, [isDemo]);
+
+  const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
+
   // ── Pre-flight modal ─────────────────────────────────────────────────────
   const [preFlight, setPreFlight] = useState<{ provider: string; cheaper: string; company: string; tier: number; estimatedCost: number } | null>(null);
 
@@ -2442,6 +2459,45 @@ function HomeInner({ data }: { data: UsageData }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Project selector */}
+              {projects.length > 0 && (
+                <div className="relative">
+                  <motion.button
+                    onClick={() => setShowProjectMenu(v => !v)}
+                    whileTap={{ scale: 0.94 }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/8 border border-white/15 text-white/60 text-xs font-semibold transition-colors hover:bg-white/12 hover:text-white/80 max-w-[140px]"
+                  >
+                    <FolderKanban className="w-3 h-3 flex-shrink-0" style={{ color: selectedProject?.color ?? "currentColor" }} />
+                    <span className="truncate">{selectedProject?.name ?? "Project"}</span>
+                    <ChevronDown className="w-3 h-3 flex-shrink-0 opacity-60" />
+                  </motion.button>
+                  <AnimatePresence>
+                    {showProjectMenu && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                        className="absolute top-full right-0 mt-2 z-30 rounded-xl border border-border/50 bg-card shadow-xl p-2 flex flex-col gap-1 min-w-[160px]"
+                      >
+                        <button
+                          onClick={() => { setSelectedProjectId(null); setShowProjectMenu(false); }}
+                          className={`text-xs font-semibold px-3 py-2 rounded-lg transition-colors text-left ${!selectedProjectId ? "bg-primary/20 text-primary" : "hover:bg-secondary text-muted-foreground"}`}
+                        >
+                          No project
+                        </button>
+                        {projects.map(p => (
+                          <button key={p.id}
+                            onClick={() => { setSelectedProjectId(p.id); setShowProjectMenu(false); }}
+                            className={`text-xs font-semibold px-3 py-2 rounded-lg transition-colors text-left flex items-center gap-2 ${selectedProjectId === p.id ? "bg-primary/20 text-primary" : "hover:bg-secondary text-foreground"}`}
+                          >
+                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
+                            <span className="truncate">{p.name}</span>
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
               <motion.button onClick={handleRunTask} disabled={isRunningTask}
                 whileTap={{ scale: 0.94 }} whileHover={{ scale: 1.05 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-400/15 border border-orange-400/30 text-orange-300 text-xs font-bold disabled:opacity-50 transition-colors hover:bg-orange-400/22">
@@ -2854,7 +2910,7 @@ function HomeInner({ data }: { data: UsageData }) {
         )}
       </AnimatePresence>
 
-      <AgentChat wallet={wallet} data={data} onOptimize={handleOptimize} onModeSwitch={handleModeSwitch} />
+      <AgentChat wallet={wallet} data={data} onOptimize={handleOptimize} onModeSwitch={handleModeSwitch} selectedProjectId={selectedProjectId} />
       <ExtensionWidget />
     </Shell>
   );

@@ -29,6 +29,7 @@ function logCostToDb(
   outputTokens: number,
   cost: number,
   label: string,
+  projectId?: string | null,
 ): void {
   if (!db || !process.env.DATABASE_URL) return;
   const dbProvider = RATES[provider]?.dbProvider ?? provider;
@@ -42,6 +43,7 @@ function logCostToDb(
     saved: 0,
     optimized: false,
     label,
+    ...(projectId ? { projectId } : {}),
   }).catch((err: unknown) => {
     console.error("[proxy] DB cost log failed (non-fatal):", err);
   });
@@ -70,12 +72,13 @@ function sanitiseBody(body: Record<string, unknown>): Record<string, unknown> {
 
 // ─── POST /api/proxy/chat ─────────────────────────────────────────────────────
 router.post("/proxy/chat", async (req: Request, res: Response) => {
-  const { provider, model, messages, userId, taskLabel } = req.body as {
+  const { provider, model, messages, userId, taskLabel, projectId } = req.body as {
     provider?: string;
     model?: string;
     messages?: { role: string; content: string }[];
     userId?: string;
     taskLabel?: string;
+    projectId?: string | null;
   };
 
   if (!provider || !["openai", "anthropic", "gemini"].includes(provider)) {
@@ -116,7 +119,7 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
       const outputTokens = completion.usage?.completion_tokens ?? 0;
       const cost = calcCost("openai", inputTokens, outputTokens);
 
-      logCostToDb(resolvedUserId, "openai", resolvedModel, inputTokens, outputTokens, cost, label);
+      logCostToDb(resolvedUserId, "openai", resolvedModel, inputTokens, outputTokens, cost, label, projectId);
 
       res.json({ content, usage: { input_tokens: inputTokens, output_tokens: outputTokens }, cost });
       return;
@@ -151,7 +154,7 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
       const outputTokens = response.usage.output_tokens;
       const cost = calcCost("anthropic", inputTokens, outputTokens);
 
-      logCostToDb(resolvedUserId, "anthropic", resolvedModel, inputTokens, outputTokens, cost, label);
+      logCostToDb(resolvedUserId, "anthropic", resolvedModel, inputTokens, outputTokens, cost, label, projectId);
 
       res.json({ content, usage: { input_tokens: inputTokens, output_tokens: outputTokens }, cost });
       return;
@@ -203,7 +206,7 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
       const outputTokens = geminiJson.usageMetadata?.candidatesTokenCount ?? 0;
       const cost = calcCost("gemini", inputTokens, outputTokens);
 
-      logCostToDb(resolvedUserId, "gemini", resolvedModel, inputTokens, outputTokens, cost, label);
+      logCostToDb(resolvedUserId, "gemini", resolvedModel, inputTokens, outputTokens, cost, label, projectId);
 
       res.json({ content, usage: { input_tokens: inputTokens, output_tokens: outputTokens }, cost });
       return;
