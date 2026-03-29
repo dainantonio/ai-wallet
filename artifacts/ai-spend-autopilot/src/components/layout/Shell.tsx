@@ -1,12 +1,15 @@
 import { Link, useLocation } from "wouter";
-import { Wallet, Home, Sparkles, BarChart3, BellRing, FlaskConical, Settings, LogOut, User, FolderKanban } from "lucide-react";
+import { Wallet, Home, Sparkles, BarChart3, BellRing, FlaskConical, Settings, LogOut, User, FolderKanban, Gem } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useAuthContext } from "@/App";
+import { useEffect } from "react";
+import { trackEvent } from "@/lib/analytics";
 
 const NAV_ITEMS = [
   { path: "/",          label: "Dashboard",    icon: Home },
   { path: "/projects",  label: "Projects",     icon: FolderKanban },
+  { path: "/pricing",   label: "Pricing",      icon: Gem },
   { path: "/usage",     label: "Usage & Models", icon: BarChart3 },
   { path: "/alerts",    label: "Alert Rules",  icon: BellRing },
   { path: "/autopilot", label: "Smart Spend",  icon: Sparkles },
@@ -17,6 +20,9 @@ const NAV_ITEMS = [
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user, logout } = useAuthContext();
+  useEffect(() => {
+    trackEvent("page_view", { path: location });
+  }, [location]);
 
   const displayName = user?.firstName
     ? `${user.firstName}${user.lastName ? " " + user.lastName : ""}`
@@ -109,7 +115,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           {/* User row */}
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-secondary/50 border border-border/30">
             {user?.profileImageUrl ? (
-              <img src={user.profileImageUrl} alt={displayName}
+              <img src={user.profileImageUrl} alt={displayName} loading="lazy"
                 className="w-8 h-8 rounded-full object-cover ring-2 ring-primary/20 flex-shrink-0" />
             ) : (
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
@@ -125,6 +131,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
+          <Link href="/pricing" className="block">
+            <button className="w-full px-3 py-2.5 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors">
+              Upgrade
+            </button>
+          </Link>
         </div>
       </aside>
 

@@ -1,12 +1,13 @@
-import { createContext, useContext, useState, lazy, Suspense, useEffect } from "react";
+import { createContext, useContext, useState, lazy, Suspense, useEffect, Component, type ErrorInfo, type ReactNode } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth, type AuthUser } from "@workspace/replit-auth-web";
 import Home from "@/pages/home";
 import LoginPage from "@/pages/login";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
+import { notifyApiError } from "@/lib/user-feedback";
 
 // ─── Lazy-load secondary pages (reduces initial bundle) ───────────────────────
 const Usage     = lazy(() => import("@/pages/usage"));
@@ -15,6 +16,7 @@ const Autopilot = lazy(() => import("@/pages/autopilot"));
 const Simulator = lazy(() => import("@/pages/simulator"));
 const Settings  = lazy(() => import("@/pages/settings"));
 const Projects  = lazy(() => import("@/pages/projects"));
+const Pricing   = lazy(() => import("@/pages/pricing"));
 const NotFound  = lazy(() => import("@/pages/not-found"));
 
 // ─── Auth context (shared across pages / Shell) ───────────────────────────────
@@ -28,6 +30,12 @@ export const AuthContext = createContext<AuthCtx>({ user: null, logout: () => {}
 export const useAuthContext = () => useContext(AuthContext);
 
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: () => notifyApiError(),
+  }),
+  mutationCache: new MutationCache({
+    onError: () => notifyApiError(),
+  }),
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
@@ -43,6 +51,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/projects" component={Projects} />
+        <Route path="/pricing" component={Pricing} />
         <Route path="/usage" component={Usage} />
         <Route path="/alerts" component={Alerts} />
         <Route path="/autopilot" component={Autopilot} />
@@ -52,6 +61,41 @@ function Router() {
       </Switch>
     </Suspense>
   );
+}
+
+
+class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
+    notifyApiError("Unexpected error");
+  }
+
+  reload = () => {
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background px-6">
+          <div className="max-w-md text-center glass-panel rounded-2xl p-8 border border-border/50">
+            <h1 className="text-2xl font-display font-bold mb-2">We hit a snag</h1>
+            <p className="text-sm text-muted-foreground mb-6">Please refresh and try again. Your data is safe.</p>
+            <button onClick={this.reload} className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90">
+              Reload app
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 const DEMO_USER: AuthUser = {
@@ -87,6 +131,7 @@ function App() {
   const activeUser = isDemo ? DEMO_USER : user;
 
   return (
+    <GlobalErrorBoundary>
     <AuthContext.Provider value={{
       user:   activeUser,
       logout: isDemo ? () => setIsDemo(false) : logout,
@@ -108,6 +153,7 @@ function App() {
         />
       )}
     </AuthContext.Provider>
+    </GlobalErrorBoundary>
   );
 }
 
