@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Wallet, Home, Sparkles, BarChart3, BellRing, FlaskConical, Settings, LogOut, User, FolderKanban } from "lucide-react";
+import { Wallet, Home, Sparkles, BarChart3, BellRing, FlaskConical, Settings, LogOut, User, FolderKanban, Gem } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useAuthContext } from "@/App";
@@ -9,6 +9,7 @@ import { trackEvent } from "@/lib/analytics";
 const NAV_ITEMS = [
   { path: "/",          label: "Dashboard",    icon: Home },
   { path: "/projects",  label: "Projects",     icon: FolderKanban },
+  { path: "/pricing",   label: "Pricing",      icon: Gem },
   { path: "/usage",     label: "Usage & Models", icon: BarChart3 },
   { path: "/alerts",    label: "Alert Rules",  icon: BellRing },
   { path: "/autopilot", label: "Smart Spend",  icon: Sparkles },
@@ -130,6 +131,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
+          <Link href="/pricing" className="block">
+            <button className="w-full px-3 py-2.5 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors">
+              Upgrade
+            </button>
+          </Link>
         </div>
       </aside>
 
