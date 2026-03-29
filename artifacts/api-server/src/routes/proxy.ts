@@ -6,6 +6,9 @@ import { db, costLogsTable } from "@workspace/db";
 import { getUserApiKey } from "./settings";
 
 const router: IRouter = Router();
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_MAX = 60;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 // ─── Rates mirror wallet.ts PROVIDER_META exactly ────────────────────────────
 const RATES: Record<string, { inRate: number; outRate: number; defaultModel: string; dbProvider: string }> = {
@@ -72,11 +75,11 @@ function sanitiseBody(body: Record<string, unknown>): Record<string, unknown> {
 
 // ─── POST /api/proxy/chat ─────────────────────────────────────────────────────
 router.post("/proxy/chat", async (req: Request, res: Response) => {
-  const { provider, model, messages, userId, taskLabel, projectId } = req.body as {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { provider, model, messages, taskLabel, projectId } = req.body as {
     provider?: string;
     model?: string;
     messages?: { role: string; content: string }[];
-    userId?: string;
     taskLabel?: string;
     projectId?: string | null;
   };
@@ -93,7 +96,18 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
     return;
   }
 
-  const resolvedUserId = userId ?? (req.isAuthenticated() ? req.user.id : "anonymous");
+  const resolvedUserId = req.user.id;
+  const now = Date.now();
+  const bucket = rateLimitStore.get(resolvedUserId);
+  if (!bucket || now > bucket.resetAt) {
+    rateLimitStore.set(resolvedUserId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+  } else {
+    if (bucket.count >= RATE_LIMIT_MAX) {
+      res.status(429).json({ error: "Rate limit exceeded" });
+      return;
+    }
+    bucket.count += 1;
+  }
   const label = taskLabel ?? `${provider} chat request`;
   const rates = RATES[provider]!;
   const resolvedModel = model ?? rates.defaultModel;
@@ -101,7 +115,7 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
   try {
     // ── OpenAI ──────────────────────────────────────────────────────────────
     if (provider === "openai") {
-      const apiKey = (await getUserApiKey(resolvedUserId, "openai")) ?? process.env.OPENAI_API_KEY;
+      const apiKey = (await getUserApiKey(resolvedUserId, "openai", projectId)) ?? process.env.OPENAI_API_KEY;
       if (!apiKey) {
         console.error("[proxy] openai key missing — userId:", resolvedUserId, "OPENAI_API_KEY set:", !!process.env.OPENAI_API_KEY);
         res.status(503).json({ error: "Provider not configured: OPENAI_API_KEY is not set. Add it in Replit Secrets or .env" });
@@ -127,7 +141,7 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
 
     // ── Anthropic ───────────────────────────────────────────────────────────
     if (provider === "anthropic") {
-      const apiKey = (await getUserApiKey(resolvedUserId, "anthropic")) ?? process.env.ANTHROPIC_API_KEY;
+      const apiKey = (await getUserApiKey(resolvedUserId, "anthropic", projectId)) ?? process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
         console.error("[proxy] anthropic key missing — userId:", resolvedUserId, "ANTHROPIC_API_KEY set:", !!process.env.ANTHROPIC_API_KEY);
         res.status(503).json({ error: "Provider not configured: ANTHROPIC_API_KEY is not set. Add it in Replit Secrets or .env" });
@@ -163,7 +177,7 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
     // ── Gemini ──────────────────────────────────────────────────────────────
     if (provider === "gemini") {
       // Accept GEMINI_API_KEY or GOOGLE_API_KEY (Replit exposes it under the latter name)
-      const apiKey = (await getUserApiKey(resolvedUserId, "google"))
+      const apiKey = (await getUserApiKey(resolvedUserId, "google", projectId))
         ?? process.env.GEMINI_API_KEY
         ?? process.env.GOOGLE_API_KEY;
       if (!apiKey) {

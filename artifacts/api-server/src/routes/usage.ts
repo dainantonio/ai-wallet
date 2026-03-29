@@ -69,7 +69,8 @@ function formatRelativeTime(date: Date): string {
 
 // ── GET /api/usage ────────────────────────────────────────────────────────────
 
-router.get("/usage", async (_req, res) => {
+router.get("/usage", async (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
     if (!db) {
       res.json(GetUsageResponse.parse(mockResponse));
@@ -84,7 +85,8 @@ router.get("/usage", async (_req, res) => {
         totalRequests: sql<number>`COUNT(*)`,
         avgCost:       sql<number>`COALESCE(AVG(${costLogsTable.cost}), 0)`,
       })
-      .from(costLogsTable);
+      .from(costLogsTable)
+      .where(sql`${costLogsTable.userId} = ${req.user.id}`);
 
     const totalRequests = Number(totals.totalRequests);
 
@@ -109,6 +111,7 @@ router.get("/usage", async (_req, res) => {
         cost:     sql<number>`COALESCE(SUM(${costLogsTable.cost}), 0)`,
       })
       .from(costLogsTable)
+      .where(sql`${costLogsTable.userId} = ${req.user.id}`)
       .groupBy(costLogsTable.model);
 
     const models = modelRows.map((row) => ({
@@ -130,6 +133,7 @@ router.get("/usage", async (_req, res) => {
     const recentRows = await db
       .select()
       .from(costLogsTable)
+      .where(sql`${costLogsTable.userId} = ${req.user.id}`)
       .orderBy(desc(costLogsTable.createdAt))
       .limit(10);
 
@@ -166,7 +170,8 @@ router.get("/usage", async (_req, res) => {
 
 // ── POST /api/optimize ────────────────────────────────────────────────────────
 
-router.post("/optimize", (_req, res) => {
+router.post("/optimize", (req, res) => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   const pick = optimizationMessages[Math.floor(Math.random() * optimizationMessages.length)];
   const newItem = {
     id: Date.now().toString(),
