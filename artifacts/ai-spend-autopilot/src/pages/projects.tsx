@@ -6,6 +6,9 @@ import { FolderKanban, Plus, Trash2, X, ChevronRight, BarChart3, Loader2, Downlo
 import { formatCurrency } from "@/lib/utils";
 import { exportCostsCsv } from "@/lib/export";
 import { InvoiceModal } from "@/components/InvoiceModal";
+import { Skeleton } from "@/components/ui/skeleton";
+import { notifyApiError, friendlyErrorMessage } from "@/lib/user-feedback";
+import { trackEvent } from "@/lib/analytics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Project {
@@ -55,7 +58,8 @@ function NewProjectModal({ onClose, onCreated }: {
       onCreated(json);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(friendlyErrorMessage());
+      notifyApiError("Could not create project");
     } finally {
       setSaving(false);
     }
@@ -243,7 +247,7 @@ function ProjectDetail({ project, onClose, onDeleted }: {
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground text-center py-6">Failed to load costs</p>
+          <p className="text-sm text-muted-foreground text-center py-6">Unable to load project costs.</p>
         )}
       </motion.div>
     </motion.div>
@@ -260,13 +264,18 @@ export default function ProjectsPage() {
   const [invoiceProject, setInvoiceProject] = useState<Project | null>(null);
   const [exportingId, setExportingId]       = useState<string | null>(null);
   const [exportError, setExportError]       = useState<string | null>(null);
+  const [loadFailed, setLoadFailed]         = useState(false);
 
   const loadProjects = useCallback(() => {
     if (isDemo) { setLoading(false); return; }
+    setLoadFailed(false);
     fetch("/api/projects", { credentials: "include" })
       .then(r => r.ok ? r.json() : [])
       .then((data: Project[]) => setProjects(data))
-      .catch(() => {})
+      .catch(() => {
+        setLoadFailed(true);
+        notifyApiError("Could not load projects");
+      })
       .finally(() => setLoading(false));
   }, [isDemo]);
 
@@ -281,8 +290,10 @@ export default function ProjectsPage() {
         projectId: project.id,
         filename: `ai-wallet-${project.name.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`,
       });
+      trackEvent("export_download", { source: "projects", project_id: project.id });
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : "Export failed");
+      setExportError(friendlyErrorMessage());
+      notifyApiError("Export failed");
       setTimeout(() => setExportError(null), 4000);
     } finally {
       setExportingId(null);
@@ -329,8 +340,28 @@ export default function ProjectsPage() {
 
         {/* Loading */}
         {loading && !isDemo && (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="stat-card-premium rounded-2xl p-5 border border-white/10 space-y-3">
+                <Skeleton className="h-10 w-10 rounded-xl" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-24" />
+                <div className="pt-2 grid grid-cols-2 gap-2">
+                  <Skeleton className="h-8 rounded-xl" />
+                  <Skeleton className="h-8 rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!loading && loadFailed && (
+          <div className="stat-card-premium rounded-xl p-4 border border-destructive/30">
+            <p className="text-sm text-muted-foreground mb-3">We couldn’t load projects right now.</p>
+            <button onClick={loadProjects} className="px-3 py-2 rounded-lg bg-primary text-white text-xs font-semibold">
+              Retry
+            </button>
           </div>
         )}
 

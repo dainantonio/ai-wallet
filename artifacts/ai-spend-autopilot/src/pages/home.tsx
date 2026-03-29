@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence, animate as motionAnimate } from "framer-motion";
 import type { UsageData } from "@workspace/api-client-react/src/generated/api.schemas";
+import { notifyApiError, friendlyErrorMessage } from "@/lib/user-feedback";
+import { trackEvent } from "@/lib/analytics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SpendMode = "saver" | "balanced" | "performance";
@@ -1314,6 +1316,7 @@ function AgentChat({ wallet, data, onOptimize, onModeSwitch, selectedProjectId }
     if (!trimmed || typing) return;
     setInput("");
     addMsg({ role: "user", content: trimmed });
+    trackEvent("agent_message", { direction: "user" });
     setTyping(true);
 
     try {
@@ -1352,14 +1355,12 @@ function AgentChat({ wallet, data, onOptimize, onModeSwitch, selectedProjectId }
       }
 
       addMsg({ role: "assistant", content: displayText, isAction: !!action });
+      trackEvent("agent_message", { direction: "assistant", action: action?.action ?? null });
       if (!isOpen) setUnread(v => v + 1);
 
-    } catch (err) {
-      const raw = err instanceof Error ? err.message : "";
-      const msg = raw.includes("not set") || raw.includes("not configured") || raw.includes("configured")
-        ? `API key missing — add your GEMINI_API_KEY in Settings (or Replit Secrets). Server said: "${raw}"`
-        : `Couldn't reach the API right now. ${raw ? `(${raw})` : "Please try again."}`;
-      addMsg({ role: "assistant", content: msg });
+    } catch {
+      notifyApiError("Assistant unavailable");
+      addMsg({ role: "assistant", content: friendlyErrorMessage() });
     } finally {
       setTyping(false);
     }
@@ -1997,6 +1998,7 @@ function HomeInner({ data }: { data: UsageData }) {
   // ── Wallet state ────────────────────────────────────────────────────────
   const [wallet, setWallet]           = useState<WalletState | null>(null);
   const [walletLoading, setWalletLoading] = useState(true);
+  const [walletLoadFailed, setWalletLoadFailed] = useState(false);
 
   // ── Action loading states ───────────────────────────────────────────────
   const [isRunningTask, setIsRunningTask]   = useState(false);
@@ -2056,12 +2058,15 @@ function HomeInner({ data }: { data: UsageData }) {
       prevBalanceRef.current = w.balance;
       prevSavedRef.current   = w.totalSaved;
       setWalletLoading(false);
+      setWalletLoadFailed(false);
       return;
     }
     fetch("/api/wallet", { credentials: "include" })
       .then(r => r.ok ? r.json() as Promise<WalletState> : Promise.reject(r.status))
       .then((w) => { setWallet(w); prevBalanceRef.current = w.balance; prevSavedRef.current = w.totalSaved; })
       .catch(() => {
+        setWalletLoadFailed(true);
+        notifyApiError("Could not connect wallet");
         const fallback = defaultClientWallet();
         setWallet(fallback);
         prevBalanceRef.current = fallback.balance;
@@ -2177,6 +2182,7 @@ function HomeInner({ data }: { data: UsageData }) {
     const { cheaper, company, tier, estimatedCost } = preFlight;
     setPreFlight(null);
     setIsRunningTask(true);
+    trackEvent("wallet_action", { action: "run_task" });
 
     await new Promise(r => setTimeout(r, 440));
 
@@ -2221,6 +2227,7 @@ function HomeInner({ data }: { data: UsageData }) {
   const handleAddFunds = useCallback(async (amount: number) => {
     if (isAddingFunds || !wallet) return;
     setIsAddingFunds(true);
+    trackEvent("wallet_action", { action: "add_funds", amount });
     setShowFundsMenu(false);
     let handled = false;
     try {
@@ -2250,6 +2257,7 @@ function HomeInner({ data }: { data: UsageData }) {
   const handleOptimize = useCallback(async () => {
     if (isOptimizing || !wallet) return;
     setIsOptimizing(true);
+    trackEvent("wallet_action", { action: "optimize" });
     let handled = false;
     try {
       const res = await fetch("/api/wallet/optimize", { method: "POST", credentials: "include" });
@@ -2289,6 +2297,7 @@ function HomeInner({ data }: { data: UsageData }) {
   // ── Mode switch ─────────────────────────────────────────────────────────
   const handleModeSwitch = useCallback(async (mode: SpendMode) => {
     if (mode === wallet?.spendMode || !wallet) return;
+    trackEvent("wallet_action", { action: "switch_mode", mode });
     let handled = false;
     try {
       const res = await fetch("/api/wallet/mode", {
@@ -2400,8 +2409,20 @@ function HomeInner({ data }: { data: UsageData }) {
   if (walletLoading) {
     return (
       <Shell>
-        <div className="flex items-center justify-center h-[60vh]">
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-3">
           <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+          <p className="text-sm text-muted-foreground">Connecting...</p>
+        </div>
+      </Shell>
+    );
+  }
+
+  if (walletLoadFailed) {
+    return (
+      <Shell>
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+          <p className="text-sm text-muted-foreground">Could not connect to your wallet.</p>
+          <button onClick={() => window.location.reload()} className="px-3 py-2 rounded-lg bg-primary text-white text-xs font-semibold">Retry</button>
         </div>
       </Shell>
     );

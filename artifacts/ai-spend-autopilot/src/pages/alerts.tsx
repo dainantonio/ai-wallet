@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthContext } from "@/App";
+import { notifyApiError } from "@/lib/user-feedback";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,10 @@ function useMonthlySummary() {
     queryKey: ["/api/costs/monthly-summary"],
     queryFn: async () => {
       const res = await fetch("/api/costs/monthly-summary", { credentials: "include" });
-      if (!res.ok) return { thisMonth: 0, lastMonth: 0, momChangePercent: 0, dailyAverage: 0 };
+      if (!res.ok) {
+        notifyApiError("Could not load monthly summary");
+        throw new Error("monthly-summary-failed");
+      }
       return res.json() as Promise<MonthlySummary>;
     },
     refetchInterval: 30_000,
@@ -53,7 +57,10 @@ function useDailySpend() {
     queryKey: ["/api/costs/daily"],
     queryFn: async () => {
       const res = await fetch("/api/costs/daily", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) {
+        notifyApiError("Could not load daily spend");
+        throw new Error("daily-spend-failed");
+      }
       const data = await res.json();
       return Array.isArray(data) ? data : (data.daily ?? []);
     },
@@ -250,8 +257,8 @@ export default function Alerts() {
   const [budget,     setBudget]     = useState(100);
   const [inputValue, setInputValue] = useState("100");
 
-  const { data: summary,   isLoading: summaryLoading } = useMonthlySummary();
-  const { data: dailyData, isLoading: dailyLoading   } = useDailySpend();
+  const { data: summary, isLoading: summaryLoading, isError: summaryError, refetch: refetchSummary } = useMonthlySummary();
+  const { data: dailyData, isLoading: dailyLoading, isError: dailyError, refetch: refetchDaily } = useDailySpend();
 
   // Today's spend from daily array
   const todayKey   = new Date().toISOString().slice(0, 10);
@@ -334,7 +341,17 @@ export default function Alerts() {
             </div>
           ) : (
             <AnimatePresence mode="sync">
-              {alerts.length > 0 ? (
+              {(summaryError || dailyError) ? (
+                <motion.div className="glass-panel p-8 rounded-2xl border border-destructive/30 text-center">
+                  <p className="text-sm text-muted-foreground mb-4">Unable to load alert data right now.</p>
+                  <button
+                    onClick={() => { void refetchSummary(); void refetchDaily(); }}
+                    className="px-3 py-2 rounded-lg bg-primary text-white text-xs font-semibold"
+                  >
+                    Retry
+                  </button>
+                </motion.div>
+              ) : alerts.length > 0 ? (
                 alerts.map((alert, i) => (
                   <AlertCard key={alert.id} alert={alert} index={i} />
                 ))
@@ -350,7 +367,7 @@ export default function Alerts() {
                     <CheckCircle2 className="w-8 h-8 text-success" />
                   </div>
                   <h3 className="text-lg font-bold text-foreground mb-1">
-                    No alerts — you're spending efficiently
+                    Set your first budget alert
                   </h3>
                   <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
                     All spend thresholds are within normal ranges. Keep up the great work!

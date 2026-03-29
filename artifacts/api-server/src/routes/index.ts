@@ -7,6 +7,7 @@ import costsRouter from "./costs";
 import proxyRouter from "./proxy";
 import settingsRouter from "./settings";
 import projectsRouter from "./projects";
+import analyticsRouter from "./analytics";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(costsRouter);
 router.use(proxyRouter);
 router.use(settingsRouter);
 router.use(projectsRouter);
+router.use(analyticsRouter);
 
 export default router;

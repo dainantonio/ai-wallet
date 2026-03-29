@@ -14,6 +14,8 @@ import {
   Download, Loader2, ChevronDown,
 } from "lucide-react";
 import { exportCostsCsv } from "@/lib/export";
+import { notifyApiError, friendlyErrorMessage } from "@/lib/user-feedback";
+import { trackEvent } from "@/lib/analytics";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtDay(iso: string) {
@@ -87,7 +89,7 @@ function DailySpendChart({ data, isLoading }: { data: DailySpend[]; isLoading: b
       ) : !hasData ? (
         <div className="h-[200px] flex flex-col items-center justify-center gap-2 text-muted-foreground">
           <Database className="w-8 h-8 opacity-25" />
-          <p className="text-sm font-medium">No cost data yet</p>
+          <p className="text-sm font-medium">Run your first AI task to start tracking</p>
           <p className="text-xs opacity-50">Run AI tasks in the dashboard to see real spend here</p>
         </div>
       ) : (
@@ -361,7 +363,7 @@ const DATE_RANGES = [
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function Usage() {
   const { data: usageData, isLoading: usageLoading } = useUsageData();
-  const { data: costData,  isLoading: costLoading  } = useCostSummary();
+  const { data: costData,  isLoading: costLoading, refetch: retryCostData } = useCostSummary();
   const hasRealModels = (costData?.byModel?.length ?? 0) > 0;
 
   const todayKey = new Date().toISOString().slice(0, 10);
@@ -384,9 +386,11 @@ export default function Usage() {
         startDate,
         filename: `ai-wallet-export-${new Date().toISOString().slice(0, 10)}.csv`,
       });
+      trackEvent("export_download", { source: "usage", range_days: selectedRange });
       setExportMsg({ type: "success", text: "CSV downloaded successfully" });
-    } catch (err) {
-      setExportMsg({ type: "error", text: err instanceof Error ? err.message : "Export failed" });
+    } catch {
+      notifyApiError("Export failed");
+      setExportMsg({ type: "error", text: friendlyErrorMessage() });
     } finally {
       setExporting(false);
       setTimeout(() => setExportMsg(null), 4000);
@@ -480,6 +484,16 @@ export default function Usage() {
       {/* ── Daily spend chart ── */}
       <div className="mb-6">
         <DailySpendChart data={costData?.daily ?? []} isLoading={costLoading} />
+        {!costLoading && (
+          <div className="mt-3">
+            <button
+              onClick={() => { void retryCostData(); }}
+              className="px-3 py-2 rounded-lg bg-secondary border border-border/40 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              Retry
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Savings opportunity + Top expensive requests ── */}
