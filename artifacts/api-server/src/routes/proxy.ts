@@ -115,7 +115,7 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
   try {
     // ── OpenAI ──────────────────────────────────────────────────────────────
     if (provider === "openai") {
-      const apiKey = (await getUserApiKey(resolvedUserId, "openai")) ?? process.env.OPENAI_API_KEY;
+      const apiKey = (await getUserApiKey(resolvedUserId, "openai", projectId)) ?? process.env.OPENAI_API_KEY;
       if (!apiKey) {
         console.error("[proxy] openai key missing — userId:", resolvedUserId, "OPENAI_API_KEY set:", !!process.env.OPENAI_API_KEY);
         res.status(503).json({ error: "Provider not configured: OPENAI_API_KEY is not set. Add it in Replit Secrets or .env" });
@@ -141,7 +141,7 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
 
     // ── Anthropic ───────────────────────────────────────────────────────────
     if (provider === "anthropic") {
-      const apiKey = (await getUserApiKey(resolvedUserId, "anthropic")) ?? process.env.ANTHROPIC_API_KEY;
+      const apiKey = (await getUserApiKey(resolvedUserId, "anthropic", projectId)) ?? process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
         console.error("[proxy] anthropic key missing — userId:", resolvedUserId, "ANTHROPIC_API_KEY set:", !!process.env.ANTHROPIC_API_KEY);
         res.status(503).json({ error: "Provider not configured: ANTHROPIC_API_KEY is not set. Add it in Replit Secrets or .env" });
@@ -177,7 +177,7 @@ router.post("/proxy/chat", async (req: Request, res: Response) => {
     // ── Gemini ──────────────────────────────────────────────────────────────
     if (provider === "gemini") {
       // Accept GEMINI_API_KEY or GOOGLE_API_KEY (Replit exposes it under the latter name)
-      const apiKey = (await getUserApiKey(resolvedUserId, "google"))
+      const apiKey = (await getUserApiKey(resolvedUserId, "google", projectId))
         ?? process.env.GEMINI_API_KEY
         ?? process.env.GOOGLE_API_KEY;
       if (!apiKey) {

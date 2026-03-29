@@ -13,7 +13,15 @@ import { useAuthContext } from "@/App";
 interface KeyStatus {
   provider: string;
   hasKey: boolean;
+  count: number;
+  keys: {
+    id: string;
+    keyName: string;
+    projectId: string | null;
+    projectName: string | null;
+  }[];
 }
+interface ProjectLite { id: string; name: string }
 
 // ─── Provider metadata ────────────────────────────────────────────────────────
 
@@ -69,12 +77,12 @@ async function fetchKeyStatus(): Promise<KeyStatus[]> {
   return res.json() as Promise<KeyStatus[]>;
 }
 
-async function saveKey(provider: string, apiKey: string): Promise<void> {
+async function saveKey(provider: string, apiKey: string, keyName: string, projectId: string | null): Promise<void> {
   const res = await fetch("/api/settings/keys", {
     method:      "POST",
     credentials: "include",
     headers:     { "Content-Type": "application/json" },
-    body:        JSON.stringify({ provider, apiKey }),
+    body:        JSON.stringify({ provider, apiKey, keyName, projectId }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string };
@@ -82,8 +90,8 @@ async function saveKey(provider: string, apiKey: string): Promise<void> {
   }
 }
 
-async function deleteKey(provider: string): Promise<void> {
-  const res = await fetch(`/api/settings/keys/${provider}`, {
+async function deleteKey(keyId: string): Promise<void> {
+  const res = await fetch(`/api/settings/keys/${keyId}`, {
     method:      "DELETE",
     credentials: "include",
   });
@@ -93,27 +101,39 @@ async function deleteKey(provider: string): Promise<void> {
   }
 }
 
+async function fetchProjects(): Promise<ProjectLite[]> {
+  const res = await fetch("/api/projects", { credentials: "include" });
+  if (!res.ok) return [];
+  return res.json() as Promise<ProjectLite[]>;
+}
+
 // ─── ProviderCard ─────────────────────────────────────────────────────────────
 
 function ProviderCard({
   meta,
-  hasKey,
+  status,
+  projects,
   delay,
 }: {
   meta: (typeof PROVIDERS)[number];
-  hasKey: boolean;
+  status: KeyStatus;
+  projects: ProjectLite[];
   delay: number;
 }) {
   const qc = useQueryClient();
 
   const [value,    setValue]    = useState("");
+  const [keyName,  setKeyName]  = useState("default");
+  const [projectId, setProjectId] = useState<string>("");
   const [visible,  setVisible]  = useState(false);
   const [savedOk,  setSavedOk]  = useState(false);
 
   const saveMutation = useMutation({
-    mutationFn: () => saveKey(meta.id, value),
+    mutationFn: () => saveKey(meta.id, value, keyName, projectId || null),
     onSuccess: () => {
       setValue("");
+      setKeyName("default");
+      setProjectId("");
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 3000);
       qc.invalidateQueries({ queryKey: ["/api/settings/keys"] });
@@ -121,7 +141,7 @@ function ProviderCard({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteKey(meta.id),
+    mutationFn: (id: string) => deleteKey(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/settings/keys"] });
     },
@@ -149,10 +169,10 @@ function ProviderCard({
         </div>
 
         {/* Status badge */}
-        {hasKey ? (
+        {status.hasKey ? (
           <span className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${meta.badgeColor}`}>
             <CheckCircle2 className="w-3 h-3" />
-            Configured
+            {status.count} key{status.count === 1 ? "" : "s"}
           </span>
         ) : (
           <span className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-secondary/60 text-muted-foreground">
@@ -173,7 +193,7 @@ function ProviderCard({
             type={visible ? "text" : "password"}
             value={value}
             onChange={e => setValue(e.target.value)}
-            placeholder={hasKey ? "Enter new key to replace…" : meta.placeholder}
+            placeholder={status.hasKey ? "Add another key…" : meta.placeholder}
             disabled={isBusy}
             className="w-full bg-background border border-border/50 rounded-xl px-4 py-3 pr-10 text-sm font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-50 transition-colors"
           />
@@ -186,6 +206,45 @@ function ProviderCard({
             {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         </div>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            value={keyName}
+            onChange={e => setKeyName(e.target.value)}
+            placeholder="Key name (default)"
+            disabled={isBusy}
+            className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-xs text-foreground"
+          />
+          <select
+            value={projectId}
+            onChange={e => setProjectId(e.target.value)}
+            disabled={isBusy}
+            className="w-full bg-background border border-border/50 rounded-xl px-3 py-2 text-xs text-foreground"
+          >
+            <option value="">All projects (default)</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+
+        {status.keys.length > 0 && (
+          <div className="space-y-2 pt-1">
+            {status.keys.map((k) => (
+              <div key={k.id} className="flex items-center justify-between rounded-lg border border-border/40 bg-secondary/30 px-2.5 py-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-foreground truncate">{k.keyName}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{k.projectName ?? "All projects"}</p>
+                </div>
+                <button
+                  onClick={() => deleteMutation.mutate(k.id)}
+                  disabled={isBusy}
+                  className="p-1 rounded text-destructive hover:bg-destructive/10"
+                  title="Remove key"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Error */}
         {(saveMutation.isError || deleteMutation.isError) && (
@@ -226,20 +285,7 @@ function ProviderCard({
             {saveMutation.isPending ? "Saving…" : "Save Key"}
           </button>
 
-          {hasKey && (
-            <button
-              onClick={() => deleteMutation.mutate()}
-              disabled={isBusy}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-destructive/10 border border-destructive/20 text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
-            >
-              {deleteMutation.isPending ? (
-                <span className="w-3.5 h-3.5 rounded-full border-2 border-destructive/30 border-t-destructive animate-spin" />
-              ) : (
-                <Trash2 className="w-3.5 h-3.5" />
-              )}
-              {deleteMutation.isPending ? "Removing…" : "Remove"}
-            </button>
-          )}
+          {deleteMutation.isPending && <span className="text-xs text-muted-foreground">Removing…</span>}
         </div>
       </div>
     </motion.div>
@@ -250,18 +296,22 @@ function ProviderCard({
 
 export default function Settings() {
   useAuthContext();
-  const qc = useQueryClient();
 
   const { data: keyStatus = [], isLoading } = useQuery<KeyStatus[]>({
     queryKey: ["/api/settings/keys"],
     queryFn:  fetchKeyStatus,
     staleTime: 60_000,
   });
+  const { data: projects = [] } = useQuery<ProjectLite[]>({
+    queryKey: ["/api/projects"],
+    queryFn: fetchProjects,
+    staleTime: 60_000,
+  });
 
   const configuredCount = keyStatus.filter(k => k.hasKey).length;
 
-  function getHasKey(providerId: string): boolean {
-    return keyStatus.find(k => k.provider === providerId)?.hasKey ?? false;
+  function getStatus(providerId: string): KeyStatus {
+    return keyStatus.find(k => k.provider === providerId) ?? { provider: providerId, hasKey: false, count: 0, keys: [] };
   }
 
   return (
@@ -307,7 +357,8 @@ export default function Settings() {
           <ProviderCard
             key={meta.id}
             meta={meta}
-            hasKey={getHasKey(meta.id)}
+            status={getStatus(meta.id)}
+            projects={projects}
             delay={i * 0.08}
           />
         ))}
