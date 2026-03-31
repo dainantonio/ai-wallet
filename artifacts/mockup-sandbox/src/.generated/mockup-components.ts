@@ -4,5 +4,6 @@ export const modules: ModuleMap = {
   "./components/mockups/ai-wallet-variants/CommandCenter.tsx": () => import("../components/mockups/ai-wallet-variants/CommandCenter.tsx"),
   "./components/mockups/ai-wallet-variants/ConversationFirst.tsx": () => import("../components/mockups/ai-wallet-variants/ConversationFirst.tsx"),
   "./components/mockups/ai-wallet-variants/FinancialPlanner.tsx": () => import("../components/mockups/ai-wallet-variants/FinancialPlanner.tsx"),
-  "./components/mockups/ai-wallet-variants/FocusMode.tsx": () => import("../components/mockups/ai-wallet-variants/FocusMode.tsx")
+  "./components/mockups/ai-wallet-variants/FocusMode.tsx": () => import("../components/mockups/ai-wallet-variants/FocusMode.tsx"),
+  "./components/mockups/ai-wallet-variants/Hybrid.tsx": () => import("../components/mockups/ai-wallet-variants/Hybrid.tsx")
 };
