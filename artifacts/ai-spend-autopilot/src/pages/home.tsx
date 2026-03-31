@@ -1226,7 +1226,7 @@ function IntelligenceFeed({
   );
 }
 
-// ─── Agent Chat Widget ────────────────────────────────────────────────────────
+// ─── Pre-Flight Modal ─────────────────────────────────────────────────────────
 
 interface ChatMessage {
   id: string;
