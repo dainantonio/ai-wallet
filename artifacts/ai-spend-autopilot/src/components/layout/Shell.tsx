@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Wallet, Home, Sparkles, BarChart3, BellRing, FlaskConical, Settings, LogOut, User, FolderKanban, Gem, MoreHorizontal } from "lucide-react";
+import { Wallet, Home, Sparkles, BarChart3, BellRing, FlaskConical, Settings, LogOut, User, FolderKanban, Gem, MoreHorizontal, PiggyBank } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useAuthContext } from "@/App";
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { path: "/pricing",   label: "Pricing",      icon: Gem },
   { path: "/usage",     label: "Usage & Models", icon: BarChart3 },
   { path: "/alerts",    label: "Alert Rules",  icon: BellRing },
+  { path: "/savings",   label: "Savings",      icon: PiggyBank },
   { path: "/autopilot", label: "Smart Spend",  icon: Sparkles },
   { path: "/simulator", label: "Simulator",    icon: FlaskConical },
   { path: "/settings",  label: "Settings",     icon: Settings     },

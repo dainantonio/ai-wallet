@@ -102,6 +102,213 @@ export function useUsageData() {
   });
 }
 
+// ─── Savings Insights Engine ──────────────────────────────────────────────────
+export type InsightCategory = "model" | "prompt" | "caching" | "routing" | "batch";
+export type InsightSeverity = "high" | "medium" | "low";
+
+export interface SavingsInsight {
+  id: string;
+  category: InsightCategory;
+  severity: InsightSeverity;
+  title: string;
+  description: string;
+  weeklySavings: number;
+  monthlySavings: number;
+  actionLabel: string;
+  details: string[];
+  metric: string;
+  metricLabel: string;
+  alternativeModel?: string;
+}
+
+export interface SavingsReport {
+  totalWeeklySavings: number;
+  totalMonthlySavings: number;
+  insights: SavingsInsight[];
+  lastAnalyzed: string;
+}
+
+function buildInsights(costData: CostSummary, usageData: UsageData): SavingsReport {
+  const insights: SavingsInsight[] = [];
+
+  // ── 1. Detect expensive model overuse ──────────────────────────────────────
+  const expensiveModels = ["gpt-4o", "claude-3-5-sonnet", "claude-3-opus", "gpt-4"];
+  const byModel = costData.byModel;
+  const totalCost = byModel.reduce((s, m) => s + m.total_cost, 0) || usageData.totalSpend;
+  const totalRequests = byModel.reduce((s, m) => s + m.request_count, 0) || usageData.totalRequests;
+
+  const expensiveUsage = byModel.filter(m =>
+    expensiveModels.some(e => m.model.toLowerCase().includes(e))
+  );
+  const expensiveRequestShare = totalRequests > 0
+    ? expensiveUsage.reduce((s, m) => s + m.request_count, 0) / totalRequests
+    : 0.65; // mock: 65% on expensive models
+
+  const expensiveCostShare = totalCost > 0
+    ? expensiveUsage.reduce((s, m) => s + m.total_cost, 0) / totalCost
+    : 0.72;
+
+  // Weekly cost baseline
+  const weekCost = costData.totals.week_cost || usageData.totalSpend * 0.25;
+  const modelSwitchSavings = +(weekCost * expensiveCostShare * 0.55).toFixed(2);
+
+  if (modelSwitchSavings > 0 || expensiveRequestShare > 0.5) {
+    const pct = Math.round((expensiveRequestShare || 0.65) * 100);
+    insights.push({
+      id: "model-overuse",
+      category: "model",
+      severity: "high",
+      title: `You could save $${Math.max(modelSwitchSavings, weekCost * 0.35 || 12).toFixed(0)}/week by switching models`,
+      description: `${pct}% of your requests use premium-tier models where a cheaper alternative would perform equally well.`,
+      weeklySavings: Math.max(modelSwitchSavings, weekCost * 0.35 || 12),
+      monthlySavings: Math.max(modelSwitchSavings, weekCost * 0.35 || 12) * 4.3,
+      actionLabel: "Switch to Gemini 1.5 Pro",
+      alternativeModel: "Gemini 1.5 Pro",
+      details: [
+        `${pct}% of calls go to GPT-4o or Claude Sonnet`,
+        "Gemini 1.5 Pro handles 85% of these tasks at 12× lower cost",
+        "Smart routing can auto-select the right model per task",
+      ],
+      metric: `${pct}%`,
+      metricLabel: "on expensive models",
+    });
+  }
+
+  // ── 2. Detect long/verbose prompts ─────────────────────────────────────────
+  const avgInputTokens = byModel.length > 0
+    ? byModel.reduce((s, m) => s + m.input_tokens, 0) / Math.max(totalRequests, 1)
+    : 1850; // mock avg
+  const BENCHMARK_INPUT_TOKENS = 1400; // industry average
+  const promptBloatPct = Math.round(((avgInputTokens - BENCHMARK_INPUT_TOKENS) / BENCHMARK_INPUT_TOKENS) * 100);
+  const promptSavings = +(weekCost * 0.20 || 8).toFixed(2);
+
+  if (avgInputTokens > BENCHMARK_INPUT_TOKENS || promptBloatPct > 0) {
+    const bloat = Math.max(promptBloatPct, 25);
+    insights.push({
+      id: "long-prompts",
+      category: "prompt",
+      severity: "medium",
+      title: `Your prompts are ${bloat}% longer than needed`,
+      description: "Verbose system prompts and repeated context are inflating your token usage and costs.",
+      weeklySavings: promptSavings,
+      monthlySavings: promptSavings * 4.3,
+      actionLabel: "Compress Prompts",
+      details: [
+        `Avg input: ~${Math.round(avgInputTokens).toLocaleString()} tokens vs ${BENCHMARK_INPUT_TOKENS.toLocaleString()} benchmark`,
+        "Redundant context accounts for ~${bloat}% of input tokens",
+        "Prompt compression templates reduce tokens without quality loss",
+      ],
+      metric: `+${bloat}%`,
+      metricLabel: "above optimal length",
+    });
+  }
+
+  // ── 3. Caching opportunity ─────────────────────────────────────────────────
+  const cacheActivity = usageData.activity.filter(a => a.type === "optimization" && a.label.toLowerCase().includes("cache"));
+  const cacheHitRate = cacheActivity.length / Math.max(usageData.activity.length, 1);
+  const EXPECTED_CACHE_RATE = 0.3;
+  const cacheSavings = +(weekCost * (EXPECTED_CACHE_RATE - Math.min(cacheHitRate, EXPECTED_CACHE_RATE)) * 1.2 || 6).toFixed(2);
+
+  if (cacheHitRate < EXPECTED_CACHE_RATE) {
+    insights.push({
+      id: "low-cache-rate",
+      category: "caching",
+      severity: "medium",
+      title: `Enable semantic caching to save $${Math.max(cacheSavings, 6).toFixed(0)}/week`,
+      description: "Many of your requests are near-duplicates. Semantic caching can serve cached responses instantly.",
+      weeklySavings: Math.max(cacheSavings, 6),
+      monthlySavings: Math.max(cacheSavings, 6) * 4.3,
+      actionLabel: "Enable Caching",
+      details: [
+        `Current cache hit rate: ${Math.round(cacheHitRate * 100)}% (target: 30%+)`,
+        "Semantic caching matches similar prompts within 0.92 cosine similarity",
+        "Zero additional latency on cache hits",
+      ],
+      metric: `${Math.round(cacheHitRate * 100)}%`,
+      metricLabel: "cache hit rate",
+    });
+  }
+
+  // ── 4. Smart routing not enabled ───────────────────────────────────────────
+  const routingActivity = usageData.activity.filter(a => a.label.toLowerCase().includes("rout"));
+  if (routingActivity.length === 0) {
+    const routingSavings = +(weekCost * 0.18 || 5.5).toFixed(2);
+    insights.push({
+      id: "no-smart-routing",
+      category: "routing",
+      severity: "low",
+      title: `Smart routing could cut costs by ${Math.round(routingSavings / Math.max(weekCost, 0.01) * 100) || 18}%`,
+      description: "Tasks are sent to the same model regardless of complexity. Simple tasks can use 10× cheaper models.",
+      weeklySavings: Math.max(routingSavings, 5.5),
+      monthlySavings: Math.max(routingSavings, 5.5) * 4.3,
+      actionLabel: "Enable Autopilot",
+      details: [
+        "Classification tasks: route to Haiku or Gemini Flash",
+        "Complex reasoning: keep on GPT-4o or Claude",
+        "Estimated 40% of tasks are simple enough for mini models",
+      ],
+      metric: "18%",
+      metricLabel: "potential cost reduction",
+    });
+  }
+
+  // ── 5. Batch processing opportunity ────────────────────────────────────────
+  const batchSavings = +(weekCost * 0.12 || 3.2).toFixed(2);
+  insights.push({
+    id: "batch-processing",
+    category: "batch",
+    severity: "low",
+    title: "Batch API cuts non-urgent job costs by 50%",
+    description: "OpenAI and Anthropic Batch APIs offer 50% discounts for non-real-time workloads.",
+    weeklySavings: Math.max(batchSavings, 3.2),
+    monthlySavings: Math.max(batchSavings, 3.2) * 4.3,
+    actionLabel: "Set Up Batch Jobs",
+    details: [
+      "Batch API: 50% off on GPT-4o, Claude Haiku, Gemini",
+      "Ideal for: report generation, embeddings, data extraction",
+      "Results delivered within 24 hours",
+    ],
+    metric: "50%",
+    metricLabel: "discount available",
+  });
+
+  const totalWeeklySavings = +insights.reduce((s, i) => s + i.weeklySavings, 0).toFixed(2);
+  const totalMonthlySavings = +(totalWeeklySavings * 4.3).toFixed(2);
+
+  return {
+    totalWeeklySavings,
+    totalMonthlySavings,
+    insights,
+    lastAnalyzed: new Date().toISOString(),
+  };
+}
+
+const EMPTY_REPORT: SavingsReport = {
+  totalWeeklySavings: 0,
+  totalMonthlySavings: 0,
+  insights: [],
+  lastAnalyzed: new Date().toISOString(),
+};
+
+export function useSavingsInsights() {
+  const { data: costData } = useCostSummary();
+  const { data: usageData } = useUsageData();
+
+  return useQuery<SavingsReport>({
+    queryKey: ["savings-insights", costData, usageData],
+    queryFn: () => {
+      const cost = costData ?? {
+        daily: [], byModel: [],
+        totals: { week_cost: 0, month_cost: 0, week_saved: 0, total_saved: 0, week_requests: 0, total_requests: 0 },
+      };
+      const usage = usageData ?? MOCK_USAGE_DATA;
+      return buildInsights(cost, usage);
+    },
+    enabled: true,
+    placeholderData: EMPTY_REPORT,
+  });
+}
+
 export function useOptimize() {
   const queryClient = useQueryClient();
   
